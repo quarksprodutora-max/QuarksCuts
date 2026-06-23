@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Quarks Cuts</title>
+    <style>
+        :root{
+            --bg:#0f0f12; --card:#17171c; --card2:#1d1d24; --line:#2a2a33;
+            --txt:#e7e7ea; --muted:#9a9aa5; --accent:#8b5cf6; --accent2:#f59e0b;
+            --green:#22c55e; --danger:#ef4444;
+        }
+        *{ box-sizing:border-box; }
+        body{ margin:0; padding:16px; background:var(--bg); color:var(--txt);
+            font-family:'Segoe UI',Arial,sans-serif; font-size:13px; }
+        .header{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+        .logo-wrap{ width:54px; height:54px; border-radius:14px; flex-shrink:0;
+            background:linear-gradient(135deg,#8b5cf6,#6d28d9);
+            display:flex; align-items:center; justify-content:center;
+            box-shadow:0 4px 14px rgba(139,92,246,.35); }
+        .logo-wrap img{ width:40px; height:40px; object-fit:contain; }
+        .title{ font-size:20px; font-weight:800; letter-spacing:.5px; margin:0;
+            background:linear-gradient(90deg,#fff,#c4b5fd); -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent; }
+        .tagline{ color:var(--muted); font-size:11px; margin-top:2px; }
+        .card{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+            padding:14px; margin:12px 0; }
+        .card h3{ margin:0 0 4px; font-size:14px; display:flex; align-items:center; gap:7px; }
+        .card .hint{ color:var(--muted); font-size:11px; line-height:1.5; margin-bottom:10px; }
+        .accent-gen{ border-top:3px solid var(--accent2); }
+        .accent-json{ border-top:3px solid var(--accent); }
+        .accent-unnest{ border-top:3px solid var(--green); }
+        label.lbl{ display:block; font-size:11px; color:var(--muted); margin:0 0 4px; }
+        select,input[type=number],input[type=text]{ width:100%; background:var(--card2);
+            color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px;
+            font-size:13px; }
+        .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+        .grid-3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px; }
+        .src-row{ display:flex; gap:8px; align-items:flex-end; margin-bottom:10px; }
+        .src-row > div{ flex:1; }
+        .chk{ display:flex; align-items:center; gap:8px; margin:4px 0 12px; color:var(--muted);
+            font-size:12px; cursor:pointer; }
+        .chk input{ width:16px; height:16px; accent-color:var(--accent2); }
+        button{ border:none; border-radius:9px; font-size:13px; font-weight:700;
+            cursor:pointer; padding:10px 16px; color:#fff; }
+        button:hover{ filter:brightness(1.1); }
+        button:disabled{ opacity:.5; cursor:default; filter:none; }
+        .btn-block{ width:100%; }
+        .btn-gen{ background:linear-gradient(90deg,var(--accent2),#d97706); color:#1a1a1a; }
+        .btn-json{ background:var(--accent); }
+        .btn-unnest{ background:var(--green); }
+        .btn-ghost{ background:var(--card2); border:1px solid var(--line); color:var(--txt);
+            padding:8px 12px; }
+        #status{ padding:11px 12px; background:var(--card2); border-radius:9px; min-height:38px;
+            border-left:3px solid var(--line); font-size:12px; line-height:1.5; word-break:break-word; }
+        #status.success{ border-left-color:var(--green); color:#bbf7d0; }
+        #status.error{ border-left-color:var(--danger); color:#fecaca; }
+        #status.info{ border-left-color:var(--accent); color:var(--muted); }
+        code{ background:var(--card2); padding:1px 5px; border-radius:5px; font-size:11px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-wrap">
+            <img src="./Icone%20Quarks%20Podcast%20Branco.png" alt="Quarks">
+        </div>
+        <div>
+            <div class="title">QUARKS CUTS</div>
+            <div class="tagline">Os cortes da IA, direto na timeline.</div>
+        </div>
+    </div>
+
+    <!-- Opções globais de saída -->
+    <div class="card">
+        <h3>⚙️ Saída dos cortes</h3>
+        <div class="grid">
+            <div>
+                <label class="lbl">Formato do quadro</label>
+                <select id="qcAspect">
+                    <option value="9x16">9:16 (vertical)</option>
+                    <option value="16x9">16:9 (horizontal)</option>
+                    <option value="">Igual à fonte</option>
+                </select>
+            </div>
+            <div>
+                <label class="lbl">Fonte (clipe 🎬 / sequência 🎞️)</label>
+                <div style="display:flex; gap:6px;">
+                    <select id="qcSource" style="flex:1;"></select>
+                    <button id="qcRefreshBtn" class="btn-ghost" title="Atualizar lista" style="flex:0 0 auto;">🔄</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gerar cortes (Whisper + Gemini) -->
+    <div class="card accent-gen">
+        <h3>⚡ Gerar cortes (Whisper + Gemini)</h3>
+        <div class="hint">Abra a <b>sequência</b> na timeline. O painel exporta o áudio, transcreve offline com Whisper e o Gemini escolhe os cortes — cada um vira uma sequência.</div>
+        <div class="grid-3">
+            <div>
+                <label class="lbl">Qualidade</label>
+                <select id="qcQuality">
+                    <option value="">Padrão</option>
+                    <option value="ggml-small.bin">Rápida (small)</option>
+                    <option value="ggml-medium.bin">Média (medium)</option>
+                    <option value="ggml-large-v3.bin">Alta (large)</option>
+                </select>
+            </div>
+            <div>
+                <label class="lbl">Qtd. cortes</label>
+                <input type="number" id="qcQtd" min="1" max="40" placeholder="auto">
+            </div>
+            <div>
+                <label class="lbl">Duração (s)</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="number" id="qcMin" min="5" placeholder="mín" value="20">
+                    <input type="number" id="qcMax" min="10" placeholder="máx" value="90">
+                </div>
+            </div>
+        </div>
+        <button id="qcGenBtn" class="btn-gen btn-block">⚡ Gerar cortes da sequência ativa</button>
+    </div>
+
+    <!-- Carregar clips.json -->
+    <div class="card accent-json">
+        <h3>📂 Carregar clips.json</h3>
+        <div class="hint">Já tem o <code>clips.json</code> do VoxFlow? Escolha a Fonte acima e carregue — cada corte vira uma sequência, na ordem certa.</div>
+        <button id="qcLoadBtn" class="btn-json btn-block">📂 Carregar clips.json</button>
+    </div>
+
+    <!-- Gerar legenda (por corte) -->
+    <div class="card" style="border-top:3px solid #38bdf8;">
+        <h3>💬 Gerar legenda do corte</h3>
+        <div class="hint">Abra o <b>corte</b> (sequência) na timeline e clique. Transcreve só ele, corrige a gramática e gera um <code>.srt</code> com linhas curtas (≤25 caracteres), salvo na pasta <code>legendas</code> e importado na bin.</div>
+        <button id="qcLegendaBtn" class="btn-block" style="background:#38bdf8; color:#0b3a4a;">💬 Gerar legenda da sequência ativa</button>
+    </div>
+
+    <!-- Desaninhar -->
+    <div class="card accent-unnest">
+        <h3>🪺 Desaninhar (unnest)</h3>
+        <div class="hint">Abra a sequência na timeline e clique. Cada sequência aninhada vira os clipes originais, na mesma posição. (Efeitos no próprio nest se perdem; desce 1 nível.)</div>
+        <button id="qcUnnestBtn" class="btn-unnest btn-block">🪺 Desaninhar a sequência ativa</button>
+    </div>
+
+    <div class="card">
+        <h3>📡 Status</h3>
+        <div id="status" class="info">Pronto. Abra a sequência e gere os cortes.</div>
+    </div>
+
+    <script type="text/javascript" src="./CSInterface.js"></script>
+    <script type="text/javascript">
+        var csInterface = new CSInterface();
+
+        function showStatus(msg, type) {
+            var status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = type;
+        }
+
+        // ---------- helpers ----------
+        function parseSrtSeconds(s) {
+            if (!s) return 0;
+            s = String(s).replace('.', ',');
+            var parts = s.split(',');
+            var hms = parts[0].split(':');
+            var ms = parts[1] ? parseInt(parts[1], 10) : 0;
+            var h = 0, mi = 0, se = 0;
+            if (hms.length === 3) { h = +hms[0]; mi = +hms[1]; se = +hms[2]; }
+            else if (hms.length === 2) { mi = +hms[0]; se = +hms[1]; }
+            else { se = +hms[0]; }
+            return h * 3600 + mi * 60 + se + (ms || 0) / 1000;
+        }
+        function qcToSeconds(v) { return (typeof v === 'number') ? v : parseSrtSeconds(v); }
+        function qcEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+        function qcCutName(num, totalSec, title) {
+            var nn = (num < 10 ? '0' + num : '' + num);
+            var t = String(title || ('Corte ' + num)).replace(/[^\w \-À-ſ]/g, '').substring(0, 60);
+            return nn + ' |' + Math.round(totalSec) + 's|- ' + t;
+        }
+        function qcClipDuration(clip) {
+            var segs = clip.segmentos || [], tot = 0;
+            for (var j = 0; j < segs.length; j++) {
+                var st = qcToSeconds(segs[j].inicio), en = qcToSeconds(segs[j].fim);
+                if (en > st) tot += (en - st);
+            }
+            return tot;
+        }
+
+        function qcRefreshSources() {
+            csInterface.evalScript('qcListSources()', function(result) {
+                var sel = document.getElementById('qcSource');
+                sel.innerHTML = '';
+                if (!result || result.indexOf('ERROR') === 0 || result.length === 0) {
+                    var o = document.createElement('option');
+                    o.value = ''; o.textContent = '(nenhuma fonte — importe um vídeo/sequência)';
+                    sel.appendChild(o);
+                    return;
+                }
+                var lines = result.split('\n');
+                var activeIdx = '';
+                for (var i = 0; i < lines.length; i++) {
+                    var parts = lines[i].split('|');
+                    if (parts.length < 4) continue;
+                    var idx = parts[0], type = parts[1], active = parts[2];
+                    var nm = parts.slice(3).join('|');
+                    var o = document.createElement('option');
+                    o.value = idx;
+                    o.textContent = (type === 'seq' ? '🎞️ ' : '🎬 ') + nm;
+                    sel.appendChild(o);
+                    if (active === '1') activeIdx = idx;
+                }
+                if (activeIdx !== '') sel.value = activeIdx;
+            });
+        }
+
+        // Monta as sequências dos cortes (recursivo). onDone(okCount, errs) ao fim.
+        function qcBuildNext(clips, idx, okCount, errs, srcIdx, aspect, onDone) {
+            if (idx >= clips.length) {
+                if (errs.length === 0) showStatus('✓ ' + okCount + ' sequência(s) criada(s) na bin "cortes".', 'success');
+                else showStatus('Concluído: ' + okCount + ' ok, ' + errs.length + ' com erro. ' + errs.join(' | '), 'error');
+                if (onDone) onDone(okCount, errs);
+                return;
+            }
+            var clip = clips[idx];
+            var segs = clip.segmentos || [];
+            var parts = [];
+            var totalSec = 0;
+            for (var i = 0; i < segs.length; i++) {
+                var st = qcToSeconds(segs[i].inicio);
+                var en = qcToSeconds(segs[i].fim);
+                if (en > st) { parts.push(st.toFixed(3) + ':' + en.toFixed(3)); totalSec += (en - st); }
+            }
+            if (parts.length === 0) { qcBuildNext(clips, idx + 1, okCount, errs, srcIdx, aspect, onDone); return; }
+            var num = idx + 1;
+            var seqName = qcCutName(num, totalSec, clip.titulo);
+            var rangesStr = parts.join(',');
+            showStatus('🎬 (' + num + '/' + clips.length + ') ' + seqName + '…', 'info');
+            csInterface.evalScript('quarksCutsBuild("' + qcEscape(seqName) + '","' + rangesStr + '","' + srcIdx + '","' + (aspect || '') + '")', function(result) {
+                var ok = okCount, e2 = errs.slice();
+                if (result && result.indexOf('SUCCESS:') === 0) ok++; else e2.push(result);
+                qcBuildNext(clips, idx + 1, ok, e2, srcIdx, aspect, onDone);
+            });
+        }
+
+        document.getElementById('qcRefreshBtn').addEventListener('click', function() {
+            qcRefreshSources();
+            showStatus('Lista de fontes atualizada.', 'info');
+        });
+
+        // ---------- 📂 Carregar clips.json ----------
+        document.getElementById('qcLoadBtn').addEventListener('click', function() {
+            var srcIdx = document.getElementById('qcSource').value;
+            if (srcIdx === '' || srcIdx === null) { showStatus('⚠️ Escolha a Fonte primeiro (🔄 se a lista estiver vazia).', 'error'); return; }
+            showStatus('📂 Selecione o clips.json…', 'info');
+            var dlg;
+            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o clips.json', '', ['json']); }
+            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return; }
+            if (!dlg || !dlg.data || dlg.data.length === 0) { showStatus('Cancelado.', 'info'); return; }
+            var fr = window.cep.fs.readFile(dlg.data[0]);
+            if (fr.err !== 0) { showStatus('⚠️ Erro ao ler o arquivo (cód ' + fr.err + ')', 'error'); return; }
+            var manifest;
+            try { manifest = JSON.parse(fr.data); } catch (e) { showStatus('⚠️ clips.json inválido: ' + e, 'error'); return; }
+            var clips = manifest.clips || [];
+            if (!clips.length) { showStatus('⚠️ Nenhum corte no arquivo.', 'error'); return; }
+            qcBuildNext(clips, 0, 0, [], srcIdx, document.getElementById('qcAspect').value);
+        });
+
+        // ---------- engine compartilhado (Node) ----------
+        function qcSanitizeFile(name) {
+            return String(name).replace(/[<>:"/\\|?*]+/g, '').replace(/\s+/g, ' ').trim().substring(0, 80);
+        }
+
+        // Carrega os módulos Node + config. Retorna o "eng" ou null (e mostra erro).
+        function qcLoadEngine() {
+            if (typeof require === 'undefined') {
+                showStatus('⚠️ Node não está habilitado. Reinstale a extensão (INSTALL.bat).', 'error');
+                return null;
+            }
+            try {
+                var fs = require('fs'), pathMod = require('path'), os = require('os');
+                var extRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
+                var gem = require(extRoot + '/engine/gemini-cortes.js');
+                var cfgPath = extRoot + '/engine/config.json';
+                return {
+                    fs: fs, pathMod: pathMod, os: os, extRoot: extRoot, cfgPath: cfgPath,
+                    cfg: JSON.parse(fs.readFileSync(cfgPath, 'utf8')),
+                    transcribe: require(extRoot + '/engine/transcribe.js').transcribe,
+                    gerarCortes: gem.gerarCortes,
+                    corrigirLegendas: gem.corrigirLegendas,
+                    srtMod: require(extRoot + '/engine/srt.js')
+                };
+            } catch (e) {
+                showStatus('⚠️ Falha ao carregar motor/config: ' + (e.message || e), 'error');
+                return null;
+            }
+        }
+
+        // Resolve o preset .epr (relativo à extensão; pede 1x e salva se faltar). null = abortar.
+        function qcResolvePreset(eng) {
+            var preset = eng.cfg.audio_export_preset || '';
+            if (preset && !eng.pathMod.isAbsolute(preset)) preset = eng.pathMod.join(eng.extRoot, preset);
+            if (preset && eng.fs.existsSync(preset)) return preset;
+            showStatus('📂 Selecione um preset de ÁUDIO (.epr)…', 'info');
+            var dlg;
+            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione um preset de áudio (.epr)', '', ['epr']); }
+            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return null; }
+            if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return null; }
+            preset = dlg.data[0];
+            eng.cfg.audio_export_preset = preset;
+            try { eng.fs.writeFileSync(eng.cfgPath, JSON.stringify(eng.cfg, null, 2)); } catch (e) {}
+            return preset;
+        }
+
+        // Exporta o áudio da seq ativa + transcreve. Promise<{segments}>. Limpa o wav.
+        function qcExportAndTranscribe(eng, preset, modelSel) {
+            return new Promise(function(resolve, reject) {
+                var outWav = eng.pathMod.join(eng.os.tmpdir(), 'qc-seq-' + Date.now() + '.wav');
+                function clean() { try { eng.fs.existsSync(outWav) && eng.fs.unlinkSync(outWav); } catch (e) {} }
+                showStatus('🎚️ Exportando o áudio da sequência ativa…', 'info');
+                csInterface.evalScript('qcExportActiveAudio("' + qcEscape(preset) + '","' + qcEscape(outWav) + '")', function(expRes) {
+                    if (!expRes || expRes.indexOf('OK:') !== 0) { reject(new Error(expRes || 'Falha ao exportar o áudio.')); return; }
+                    showStatus('🎙️ Transcrevendo… (pode demorar alguns minutos)', 'info');
+                    eng.transcribe(expRes.substring(3), { onProgress: function(m) { showStatus('🎙️ ' + m, 'info'); }, model: modelSel || undefined })
+                        .then(function(res) { clean(); resolve(res); })
+                        .catch(function(e) { clean(); reject(e); });
+                });
+            });
+        }
+
+        // ---------- ⚡ Gerar cortes (Whisper offline + Gemini) ----------
+        document.getElementById('qcGenBtn').addEventListener('click', function() {
+            var eng = qcLoadEngine(); if (!eng) return;
+            var preset = qcResolvePreset(eng); if (!preset) return;
+
+            var aspect = document.getElementById('qcAspect').value;
+            var modelSel = document.getElementById('qcQuality').value;
+            var qtd = parseInt(document.getElementById('qcQtd').value, 10);
+            var minD = parseInt(document.getElementById('qcMin').value, 10);
+            var maxD = parseInt(document.getElementById('qcMax').value, 10);
+            var opts = { quantidade: isNaN(qtd) ? 0 : qtd, minDur: isNaN(minD) ? 0 : minD, maxDur: isNaN(maxD) ? 0 : maxD };
+
+            qcExportAndTranscribe(eng, preset, modelSel)
+                .then(function(res) {
+                    showStatus('🧠 Pensando nos melhores cortes (Gemini)…', 'info');
+                    return eng.gerarCortes(res.segments, opts);
+                })
+                .then(function(out) {
+                    var clips = out.clips || [];
+                    if (!clips.length) { showStatus('⚠️ Nenhum corte sugerido.', 'error'); return; }
+                    csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
+                        if (!idxRes || idxRes.indexOf('OK:') !== 0) { showStatus(idxRes || '⚠️ Não achei a sequência ativa.', 'error'); return; }
+                        qcBuildNext(clips, 0, 0, [], idxRes.substring(3), aspect);
+                    });
+                })
+                .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
+        });
+
+        // ---------- 💬 Gerar legenda (só da sequência ativa) ----------
+        document.getElementById('qcLegendaBtn').addEventListener('click', function() {
+            var eng = qcLoadEngine(); if (!eng) return;
+            var preset = qcResolvePreset(eng); if (!preset) return;
+            var modelSel = document.getElementById('qcQuality').value;
+
+            qcExportAndTranscribe(eng, preset, modelSel)
+                .then(function(res) {
+                    var words = res.segments || [];
+                    if (!words.length) { showStatus('⚠️ Sem fala detectada nesta sequência.', 'error'); return; }
+                    // Reagrupa as palavras em legendas curtas, quebrando na pontuação.
+                    var grupos = eng.srtMod.agruparPorPontuacao(words, 20);
+                    if (!grupos.length) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
+                    showStatus('📝 Corrigindo a legenda (gramática/acentuação)…', 'info');
+                    return eng.corrigirLegendas(grupos.map(function(c) { return c.text; })).then(function(corr) {
+                        // O áudio exportado JÁ é o corte → tempos 0-based, sem re-base.
+                        var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
+                        var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], caps);
+                        if (!srtStr.trim()) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
+                        csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
+                            var nome = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'legenda';
+                            csInterface.evalScript('qcProjectDir()', function(dirRes) {
+                                var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+                                var outDir = eng.pathMod.join(base, 'legendas');
+                                var file = eng.pathMod.join(outDir, qcSanitizeFile(nome) + '.srt');
+                                try {
+                                    if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true });
+                                    eng.fs.writeFileSync(file, srtStr, 'utf8');
+                                } catch (e) { showStatus('⚠️ Erro ao salvar o .srt: ' + (e.message || e), 'error'); return; }
+                                csInterface.evalScript('qcImportLegendas("' + qcEscape(file) + '")', function(impRes) {
+                                    var imported = (impRes && impRes.indexOf('SUCCESS:') === 0);
+                                    showStatus('✓ Legenda gerada: ' + file + (imported ? ' (importada na bin "legendas").' : ' (importe manualmente).'), 'success');
+                                });
+                            });
+                        });
+                    });
+                })
+                .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
+        });
+
+        // ---------- 🪺 Desaninhar ----------
+        document.getElementById('qcUnnestBtn').addEventListener('click', function() {
+            showStatus('🪺 Desaninhando a sequência ativa…', 'info');
+            csInterface.evalScript('quarksUnnestActive()', function(result) {
+                if (result.indexOf('ERROR:') === 0) showStatus(result, 'error');
+                else if (result.indexOf('SUCCESS:') === 0) showStatus(result, 'success');
+                else showStatus(result, 'info');
+            });
+        });
+
+        window.addEventListener('load', function() {
+            qcRefreshSources();
+            showStatus('Pronto. Abra a sequência e gere os cortes.', 'info');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "gemini_api_key": "COLE_SUA_CHAVE_GEMINI_AQUI",
+  "clip_model": "gemini-flash-latest",
+  "whisper_language": "auto",
+  "audio_export_preset": "C:\\Program Files\\Adobe\\...\\Waveform Audio 48kHz 16-bit.epr",
+  "whisper_cli_path": "C:\\caminho\\para\\bin\\Release\\whisper-cli.exe",
+  "whisper_model": "C:\\caminho\\para\\bin\\ggml-medium.bin",
+  "ffmpeg_path": "C:\\caminho\\para\\bin\\ffmpeg\\bin\\ffmpeg.exe"
+}

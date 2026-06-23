@@ -1,0 +1,9 @@
+# Binários grandes do fluxo "Gerar cortes" (baixados manualmente — ver bin/README.md)
+clip_assassin/bin/*
+!clip_assassin/bin/README.md
+
+# Chave real do Gemini fica fora do Git; versionamos só o config.example.json.
+clip_assassin/engine/config.json
+
+# Pacote de distribuição (contém a chave embutida) — nunca versionar.
+_dist/
