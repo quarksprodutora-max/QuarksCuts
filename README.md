@@ -1,4 +1,4 @@
-# Quarks Cuts — painel do Premiere
+# Quarks Cuts — painel do Premiere - Cortes para podcast
 
 > Os cortes da IA, direto na timeline do Premiere — na ordem certa (gancho primeiro).
 
