@@ -9,6 +9,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { qcLog } = require('./log.js');
 
 const ENGINE_DIR = __dirname;
 const BIN_DIR = path.join(ENGINE_DIR, '..', 'bin');
@@ -34,19 +35,56 @@ function resolveBin(cfgPath, defaultName) {
   return null;
 }
 
+// Sem saída por este tempo = processo travado (ex.: Windows suspendeu no meio
+// e o processo nunca voltou) → mata e retorna erro claro, em vez de o painel
+// ficar "Transcrevendo…" para sempre.
+const STALL_MS = 10 * 60 * 1000;
+
 function run(cmd, args, onStderr) {
   return new Promise((resolve, reject) => {
     let err = '';
+    let lastActivity = Date.now();
+    let settled = false;
+    const t0 = Date.now();
+    qcLog('run', path.basename(cmd) + ' ' + args.join(' '));
     const p = spawn(cmd, args, { windowsHide: true });
+
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastActivity > STALL_MS) {
+        clearInterval(watchdog);
+        if (!settled) {
+          settled = true;
+          try { p.kill('SIGKILL'); } catch (e) {}
+          qcLog('run', 'WATCHDOG matou ' + path.basename(cmd) + ' após ' + Math.round((Date.now() - t0) / 1000) + 's sem atividade');
+          reject(new Error(path.basename(cmd) + ' ficou ' + Math.round(STALL_MS / 60000) +
+            ' min sem responder e foi finalizado. Tente de novo (evite suspender o PC durante o processo).'));
+        }
+      }
+    }, 60 * 1000);
+
+    p.stdout.on('data', () => { lastActivity = Date.now(); });
     p.stderr.on('data', (d) => {
+      lastActivity = Date.now();
       const s = d.toString();
       err += s;
       if (onStderr) onStderr(s);
     });
-    p.on('error', (e) => reject(new Error('Falha ao executar ' + path.basename(cmd) + ': ' + e.message)));
+    p.on('error', (e) => {
+      clearInterval(watchdog);
+      if (!settled) { settled = true; reject(new Error('Falha ao executar ' + path.basename(cmd) + ': ' + e.message)); }
+    });
     p.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(path.basename(cmd) + ' saiu com código ' + code + '. ' + err.slice(-400)));
+      clearInterval(watchdog);
+      if (settled) return;
+      settled = true;
+      const secs = Math.round((Date.now() - t0) / 1000);
+      if (code === 0) {
+        qcLog('run', path.basename(cmd) + ' OK em ' + secs + 's');
+        resolve();
+      } else {
+        qcLog('run', path.basename(cmd) + ' FALHOU código ' + code + ' em ' + secs + 's. stderr: ' + err.slice(-400));
+        reject(new Error(path.basename(cmd) + ' saiu com código ' + code + '. ' + err.slice(-400)));
+      }
     });
   });
 }
@@ -66,7 +104,51 @@ function parseWhisperJson(jsonPath) {
       text: text,
     });
   }
-  return segs;
+  return filterHallucinations(segs);
+}
+
+// Filtro anti-alucinação (portado do transcriber.py do VoxFlow, adaptado para
+// a saída em nível de PALAVRA do whisper.cpp com -ml 1). Em trechos de música,
+// silêncio ou ruído o Whisper alucina: anotações tipo "[Música]"/"♪" e loops
+// de palavra/frase ("obrigado obrigado obrigado…", "você sabe você sabe…").
+function qcNormWord(t) {
+  return String(t).toLowerCase().replace(/^[.,!?"'…¿¡()\[\]]+|[.,!?"'…¿¡()\[\]]+$/g, '');
+}
+
+function filterHallucinations(words) {
+  // 1) artefatos não-fala: [Música], (Aplausos), ♪♫, legendas de comunidade
+  const clean = words.filter(function (w) {
+    const t = w.text.trim();
+    if (/^[\[\(].*[\]\)]$/.test(t)) return false;
+    if (/[♪♫]/.test(t)) return false;
+    return true;
+  });
+
+  // 2) colapsa loops: se a palavra repete a de p posições atrás (período 1..5)
+  //    por 2+ ciclos completos da "frase", descarta o excedente. Mantém até
+  //    2 repetições (fala real tem "não, não, não"; 3+ ciclos é alucinação).
+  const drop = new Array(clean.length).fill(false);
+  for (let p = 1; p <= 5; p++) {
+    let run = 0;
+    for (let i = p; i < clean.length; i++) {
+      const cur = qcNormWord(clean[i].text);
+      if (cur !== '' && cur === qcNormWord(clean[i - p].text)) {
+        run++;
+        if (run >= p * 2) drop[i] = true;
+      } else {
+        run = 0;
+      }
+    }
+  }
+  return clean.filter(function (w, i) { return !drop[i]; });
+}
+
+// Resolve o caminho do modelo que SERIA usado para uma dada opção (ou o padrão
+// do config). Síncrono — usado pelo painel para nomear o cache SEM precisar
+// rodar a transcrição (ex.: decidir se já existe transcript-<modelo>.json).
+function resolveModelPath(modelOverride) {
+  const cfg = loadConfig();
+  return resolveBin(modelOverride || cfg.whisper_model, 'ggml-small.bin');
 }
 
 // transcribe(mediaPath, { onProgress, model }) -> Promise<{ segments, language }>
@@ -85,6 +167,8 @@ async function transcribe(mediaPath, opts) {
   if (!whisper) throw new Error('whisper-cli.exe não encontrado em bin/ (veja bin/README.md).');
   if (!model) throw new Error('Modelo Whisper (.bin) não encontrado em bin/ (veja bin/README.md).');
 
+  qcLog('transcribe', 'INÍCIO — mídia: ' + mediaPath + ' | modelo: ' + path.basename(model));
+
   const stamp = Date.now() + '-' + Math.floor(Math.random() * 1e6);
   const wavPath = path.join(os.tmpdir(), 'qc-' + stamp + '.wav');
   const outBase = path.join(os.tmpdir(), 'qc-' + stamp);
@@ -95,18 +179,22 @@ async function transcribe(mediaPath, opts) {
     if (opts.onProgress) opts.onProgress('Extraindo áudio (ffmpeg)…');
     await run(ffmpeg, ['-y', '-i', mediaPath, '-ar', '16000', '-ac', '1', '-vn', '-f', 'wav', wavPath]);
 
-    if (opts.onProgress) opts.onProgress('Transcrevendo (Whisper offline)…');
+    if (opts.onProgress) opts.onProgress('Transcrevendo (Whisper offline)… 0%');
+    let lastPct = 0;
     await run(
       whisper,
-      ['-m', model, '-f', wavPath, '-l', lang, '-ml', '1', '-sow', '-oj', '-of', outBase],
+      ['-m', model, '-f', wavPath, '-l', lang, '-ml', '1', '-sow', '-pp', '-oj', '-of', outBase],
       function (s) {
-        // whisper.cpp imprime progresso em stderr; mantém o status "vivo".
-        if (opts.onProgress) opts.onProgress('Transcrevendo (Whisper offline)…');
+        // -pp faz o whisper.cpp imprimir "progress = NN%" no stderr.
+        const m = /progress\s*=\s*(\d+)%/.exec(s);
+        if (m) lastPct = parseInt(m[1], 10);
+        if (opts.onProgress) opts.onProgress('Transcrevendo (Whisper offline)… ' + lastPct + '%');
       }
     );
 
     if (!fs.existsSync(jsonPath)) throw new Error('Whisper não gerou o JSON esperado (' + jsonPath + ').');
     const segments = parseWhisperJson(jsonPath);
+    qcLog('transcribe', 'FIM — ' + segments.length + ' palavras transcritas');
     if (segments.length === 0) throw new Error('Transcrição vazia — o vídeo tem fala audível?');
     return { segments: segments, language: lang };
   } finally {
@@ -116,4 +204,4 @@ async function transcribe(mediaPath, opts) {
   }
 }
 
-module.exports = { transcribe };
+module.exports = { transcribe, resolveModelPath };

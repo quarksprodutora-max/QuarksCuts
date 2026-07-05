@@ -468,6 +468,137 @@ function qcActiveSeqName() {
     }
 }
 
+// Chave estável p/ cache em disco da sequência ativa (áudio exportado + transcrição).
+// Usa o nodeId do projectItem da sequência (estável dentro do projeto) + nome
+// (só p/ o humano identificar a pasta). Sanitiza p/ virar nome de pasta seguro.
+function qcSanitizeForFolder(s) {
+    return String(s).replace(/[^\w\-]+/g, '_').substring(0, 50);
+}
+function qcActiveCacheKey() {
+    try {
+        if (!app.project || !app.project.activeSequence) return "ERROR: Nenhuma sequência ativa.";
+        var seq = app.project.activeSequence;
+        var nodeId = "";
+        try { nodeId = seq.projectItem ? seq.projectItem.nodeId : ""; } catch (e) {}
+        if (!nodeId) nodeId = "noid";
+        return "OK:" + qcSanitizeForFolder(nodeId) + "__" + qcSanitizeForFolder(seq.name);
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// FPS da sequência ativa (p/ alinhar tempos de legenda ao frame antes do SRT —
+// o Premiere arredonda pro frame na importação; pré-alinhar elimina o desvio).
+function qcActiveSeqFps() {
+    try {
+        if (!app.project || !app.project.activeSequence) return "ERROR: Nenhuma sequência ativa.";
+        var st = app.project.activeSequence.getSettings();
+        // videoFrameRate é um Time = duração de UM frame em segundos.
+        var frameDur = st.videoFrameRate.seconds;
+        if (!frameDur || frameDur <= 0) return "ERROR: FPS indisponível.";
+        return "OK:" + (1 / frameDur);
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Seta o texto de um gráfico MOGRT inserido. Estratégias em cascata (padrão
+// validado no projeto open-source auto-legenda):
+// 1) campo com o nome configurado (mogrt_text_param);
+// 2) varre as propriedades: valor JSON com "textEditValue" → troca só o texto
+//    preservando o resto (fonte/estilo); nome que parece campo de texto → seta direto.
+function qcSetMogrtText(item, paramName, texto) {
+    var comp = null;
+    try { comp = item.getMGTComponent(); } catch (e) {}
+    if (!comp || !comp.properties) return false;
+    var props = comp.properties;
+    var esc = texto.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    function trySet(prop) {
+        var val = '';
+        try { val = String(prop.getValue()); } catch (e) {}
+        if (val.indexOf('textEditValue') !== -1) {
+            var safe = esc.replace(/\$/g, '$$$$'); // $ é especial no replace
+            var novo = val.replace(/("textEditValue"\s*:\s*")(?:[^"\\]|\\.)*(")/, '$1' + safe + '$2');
+            try {
+                if (novo !== val) { prop.setValue(novo, true); return true; }
+                prop.setValue('{"textEditValue":"' + esc + '"}', true); return true;
+            } catch (e) { return false; }
+        }
+        var nm = '';
+        try { nm = String(prop.displayName); } catch (e) {}
+        if (/text|texto|source|legenda|caption|t[ií]tulo/i.test(nm)) {
+            try { prop.setValue(texto, true); return true; } catch (e) { return false; }
+        }
+        return false;
+    }
+
+    // 1) campo configurado
+    try {
+        var p = props.getParamForDisplayName(paramName);
+        if (p && trySet(p)) return true;
+    } catch (e) {}
+    // 2) varredura
+    try {
+        for (var i = 0; i < props.numItems; i++) {
+            if (trySet(props[i])) return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
+// Insere as legendas como GRÁFICOS (MOGRT) na sequência ativa — uma cópia do
+// modelo .mogrt por legenda, com o texto e os tempos de cada uma, numa trilha
+// de vídeo nova acima das existentes.
+// payloadStr: JSON {"mogrt":"caminho","param":"Source Text","caps":[{"s":0.5,"e":2.1,"t":"texto"}]}
+// A API de MOGRT é pouco documentada; setamos o texto com 2 estratégias e
+// reportamos quantas legendas ficaram sem texto (p/ diagnóstico no painel).
+function qcInsertCaptionMogrts(payloadStr) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var seq = app.project.activeSequence;
+        if (!seq) return "ERROR: Nenhuma sequência ativa.";
+
+        var data;
+        try { data = eval('(' + payloadStr + ')'); } catch (e) { return "ERROR: payload inválido: " + e.toString(); }
+        var mogrt = data.mogrt, paramName = data.param || 'Source Text', caps = data.caps || [];
+        if (!mogrt) return "ERROR: Caminho do .mogrt não informado.";
+        if (!(new File(mogrt)).exists) return "ERROR: .mogrt não encontrado: " + mogrt;
+        if (caps.length === 0) return "ERROR: Nenhuma legenda para inserir.";
+
+        // Trilha alvo: uma nova, acima de todas (não mexe no vídeo do corte).
+        var targetTrack = seq.videoTracks.numTracks;
+        qcEnsureTracks(seq, targetTrack + 1, 0);
+        if (seq.videoTracks.numTracks <= targetTrack) {
+            // QE indisponível? usa a trilha mais alta existente mesmo.
+            targetTrack = seq.videoTracks.numTracks - 1;
+        }
+
+        var inserted = 0, textFails = 0, firstErr = "";
+        for (var i = 0; i < caps.length; i++) {
+            var c = caps[i];
+            var t = new Time(); t.seconds = c.s;
+            var item = null;
+            try { item = seq.importMGT(mogrt, t.ticks, targetTrack, 0); } catch (e) { if (!firstErr) firstErr = e.toString(); }
+            if (!item) { if (!firstErr) firstErr = "importMGT retornou nulo"; continue; }
+            inserted++;
+
+            // duração: estica/encolhe o gráfico até o fim da legenda
+            try { var te = new Time(); te.seconds = c.e; item.end = te; } catch (e) {}
+
+            // texto: cascata de estratégias (técnica validada no auto-legenda)
+            if (!qcSetMogrtText(item, paramName, c.t)) textFails++;
+        }
+
+        if (inserted === 0) return "ERROR: Nenhum gráfico inserido. " + firstErr;
+        var msg = "SUCCESS: " + inserted + " legenda(s) inserida(s) na trilha V" + (targetTrack + 1);
+        if (textFails > 0) msg += " — ATENÇÃO: " + textFails + " sem texto (confira o nome do campo de texto do MOGRT no config: mogrt_text_param)";
+        return msg;
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
 // Pasta do arquivo do projeto (.prproj). Usada p/ salvar as legendas ao lado.
 function qcProjectDir() {
     try {

@@ -1,3 +1,15 @@
+> ⚠️ **Legado / suporte parcial.** Estas instruções são do projeto original
+> (Clip Assassin) e cobrem só a instalação da extensão em si. Os recursos novos do
+> **Quarks Cuts** — ⚡ Gerar cortes e 💬 Gerar legenda (Whisper + Gemini) — são
+> **Windows-only**: dependem de binários `.exe` (`whisper-cli.exe`, `ffmpeg.exe`),
+> chamam `curl.exe` de `C:\Windows\System32` e usam caminhos com `\` no config.
+> Não funcionam no macOS sem adaptação. O modo manual antigo (RUN THE BLADES) que
+> este guia pressupõe também foi **removido da interface** (ficou só código morto
+> no `.jsx`) — hoje só resta `📂 Carregar clips.json` como fluxo potencialmente
+> multiplataforma, e mesmo esse não foi testado no Mac nesta versão.
+>
+> Mantido por referência histórica de como o CEP era instalado no macOS.
+
 # macOS Installation Guide - Clip Assassin
 
 ## Quick Start

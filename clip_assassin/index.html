@@ -89,6 +89,9 @@
                 </div>
             </div>
         </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:2px;">
+            <button id="qcClearCacheBtn" class="btn-ghost" title="Apaga o áudio e as transcrições já processados (todas as sequências)" style="padding:6px 10px; font-size:11px;">🧹 Limpar cache</button>
+        </div>
     </div>
 
     <!-- Gerar cortes (Whisper + Gemini) -->
@@ -130,8 +133,22 @@
     <!-- Gerar legenda (por corte) -->
     <div class="card" style="border-top:3px solid #38bdf8;">
         <h3>💬 Gerar legenda do corte</h3>
-        <div class="hint">Abra o <b>corte</b> (sequência) na timeline e clique. Transcreve só ele, corrige a gramática e gera um <code>.srt</code> com linhas curtas (≤25 caracteres), salvo na pasta <code>legendas</code> e importado na bin.</div>
-        <button id="qcLegendaBtn" class="btn-block" style="background:#38bdf8; color:#0b3a4a;">💬 Gerar legenda da sequência ativa</button>
+        <div class="hint">Abra o <b>corte</b> (sequência) na timeline e clique. Transcreve só ele, corrige (ou traduz) e gera um <code>.srt</code> com linhas curtas quebradas na pontuação, salvo na pasta <code>legendas</code> e importado na bin.</div>
+        <div style="margin-bottom:10px;">
+            <label class="lbl">Idioma da legenda</label>
+            <select id="qcLegIdioma">
+                <option value="">Original (corrigida)</option>
+                <option value="pt">Português (traduzida)</option>
+                <option value="en">Inglês</option>
+                <option value="es">Espanhol</option>
+                <option value="fr">Francês</option>
+                <option value="it">Italiano</option>
+            </select>
+        </div>
+        <button id="qcLegendaBtn" class="btn-block" style="background:#38bdf8; color:#0b3a4a;">💬 Gerar legenda .srt (arrastar na timeline)</button>
+        <button id="qcMogrtBtn" class="btn-block" style="background:#0ea5e9; color:#fff; margin-top:8px;">🎨 Legenda estilizada — direto na timeline (MOGRT)</button>
+        <button id="qcMogrtSrtBtn" class="btn-block btn-ghost" style="margin-top:8px;">🎨 MOGRTs a partir de um .srt ajustado…</button>
+        <div class="hint" style="margin-top:8px; margin-bottom:0;">🎨 usa o seu modelo <code>.mogrt</code> (padrão do podcast): exporte o gráfico de legenda no Essential Graphics uma vez; o painel pede o arquivo no 1º uso.<br>Ajustou a legenda na timeline? Exporte-a (painel <b>Texto → Legendas → … → Exportar para arquivo SRT</b>) e use o botão de cima com o arquivo — os gráficos saem nos seus tempos corrigidos.</div>
     </div>
 
     <!-- Desaninhar -->
@@ -150,10 +167,47 @@
     <script type="text/javascript">
         var csInterface = new CSInterface();
 
+        // Logger em arquivo (%APPDATA%\QuarksCuts\panel.log) — carregado sob demanda;
+        // se o Node não estiver disponível, vira no-op silencioso.
+        var qcFileLog = null;
+        function qcPanelLog(msg) {
+            try {
+                if (qcFileLog === null && typeof require !== 'undefined') {
+                    var er = csInterface.getSystemPath(SystemPath.EXTENSION);
+                    qcFileLog = require(er + '/engine/log.js');
+                }
+                if (qcFileLog) qcFileLog.qcLog('painel', msg);
+            } catch (e) { qcFileLog = false; }
+        }
+
+        // ---------- trava global anti-clique-duplo ----------
+        // Enquanto um processo roda, TODOS os botões ficam desabilitados; a trava
+        // solta sozinha quando o fluxo termina (status de sucesso/erro/cancelado).
+        var qcBusy = false;
+        var QC_BOTOES = ['qcRefreshBtn', 'qcLoadBtn', 'qcGenBtn', 'qcLegendaBtn', 'qcMogrtBtn', 'qcMogrtSrtBtn', 'qcUnnestBtn'];
+        function qcSetBusy(b) {
+            qcBusy = b;
+            for (var i = 0; i < QC_BOTOES.length; i++) {
+                var el = document.getElementById(QC_BOTOES[i]);
+                if (el) el.disabled = b;
+            }
+        }
+        // Chamar no início de cada handler pesado: retorna false se já ocupado.
+        function qcComecar() {
+            if (qcBusy) { qcPanelLog('clique ignorado: processo em andamento'); return false; }
+            qcSetBusy(true);
+            return true;
+        }
+
         function showStatus(msg, type) {
             var status = document.getElementById('status');
+            // Em erro, aponta onde está o diário completo (diagnóstico da equipe).
+            if (type === 'error') msg += '  (detalhes: %APPDATA%\\QuarksCuts\\panel.log)';
             status.textContent = msg;
             status.className = type;
+            qcPanelLog((type === 'error' ? 'ERRO: ' : '') + msg);
+            // Fim de fluxo (sucesso, erro ou cancelamento) → libera os botões.
+            if (type === 'success' || type === 'error' || msg.indexOf('Cancelado') === 0) qcSetBusy(false);
         }
 
         // ---------- helpers ----------
@@ -246,8 +300,34 @@
             showStatus('Lista de fontes atualizada.', 'info');
         });
 
+        // ---------- 🧹 Limpar cache ----------
+        // Apaga a pasta de cache inteira (áudio + transcrições de TODAS as sequências)
+        // e também sobras de .wav antigas no TEMP (de execuções que não terminaram
+        // limpo, ex.: Premiere fechado no meio de um processamento grande).
+        document.getElementById('qcClearCacheBtn').addEventListener('click', function() {
+            var eng = qcLoadEngine(); if (!eng) return;
+            try {
+                var root = qcCacheRoot(eng);
+                var freed = qcDirSize(eng.fs, eng.pathMod, root);
+                qcRmrf(eng.fs, eng.pathMod, root);
+
+                var tmp = eng.os.tmpdir();
+                var orphaned = eng.fs.readdirSync(tmp).filter(function(n) { return /^qc-.*\.wav$/i.test(n); });
+                orphaned.forEach(function(n) {
+                    var fp = eng.pathMod.join(tmp, n);
+                    try { freed += eng.fs.statSync(fp).size; eng.fs.unlinkSync(fp); } catch (e) {}
+                });
+
+                var mb = Math.round(freed / 1024 / 1024);
+                showStatus('🧹 Cache limpo — ' + mb + ' MB liberados.', 'success');
+            } catch (e) {
+                showStatus('⚠️ Erro ao limpar cache: ' + (e.message || e), 'error');
+            }
+        });
+
         // ---------- 📂 Carregar clips.json ----------
         document.getElementById('qcLoadBtn').addEventListener('click', function() {
+            if (!qcComecar()) return;
             var srcIdx = document.getElementById('qcSource').value;
             if (srcIdx === '' || srcIdx === null) { showStatus('⚠️ Escolha a Fonte primeiro (🔄 se a lista estiver vazia).', 'error'); return; }
             showStatus('📂 Selecione o clips.json…', 'info');
@@ -279,11 +359,13 @@
                 var fs = require('fs'), pathMod = require('path'), os = require('os');
                 var extRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
                 var gem = require(extRoot + '/engine/gemini-cortes.js');
+                var tr = require(extRoot + '/engine/transcribe.js');
                 var cfgPath = extRoot + '/engine/config.json';
                 return {
                     fs: fs, pathMod: pathMod, os: os, extRoot: extRoot, cfgPath: cfgPath,
                     cfg: JSON.parse(fs.readFileSync(cfgPath, 'utf8')),
-                    transcribe: require(extRoot + '/engine/transcribe.js').transcribe,
+                    transcribe: tr.transcribe,
+                    resolveModelPath: tr.resolveModelPath,
                     gerarCortes: gem.gerarCortes,
                     corrigirLegendas: gem.corrigirLegendas,
                     srtMod: require(extRoot + '/engine/srt.js')
@@ -310,24 +392,94 @@
             return preset;
         }
 
-        // Exporta o áudio da seq ativa + transcreve. Promise<{segments}>. Limpa o wav.
+        // ---------- cache persistente (áudio exportado + transcrições) ----------
+        // %LOCALAPPDATA%\QuarksCuts\cache\<sequencia>\  — sobrevive entre sessões,
+        // ao contrário do TEMP. Evita reexportar/retranscrever quando só a
+        // qualidade do Whisper ou a quantidade/duração dos cortes muda.
+        function qcCacheRoot(eng) {
+            var base = process.env.LOCALAPPDATA || eng.os.tmpdir();
+            var root = eng.pathMod.join(base, 'QuarksCuts', 'cache');
+            if (!eng.fs.existsSync(root)) eng.fs.mkdirSync(root, { recursive: true });
+            return root;
+        }
+
+        function qcRmrf(fs, pathMod, p) {
+            if (!fs.existsSync(p)) return;
+            var st = fs.statSync(p);
+            if (st.isDirectory()) {
+                fs.readdirSync(p).forEach(function(name) { qcRmrf(fs, pathMod, pathMod.join(p, name)); });
+                fs.rmdirSync(p);
+            } else {
+                fs.unlinkSync(p);
+            }
+        }
+
+        function qcDirSize(fs, pathMod, p) {
+            if (!fs.existsSync(p)) return 0;
+            var st = fs.statSync(p);
+            if (!st.isDirectory()) return st.size;
+            var total = 0;
+            fs.readdirSync(p).forEach(function(name) { total += qcDirSize(fs, pathMod, pathMod.join(p, name)); });
+            return total;
+        }
+
+        // Exporta o áudio da seq ativa + transcreve, REAPROVEITANDO cache quando possível:
+        // - transcript-<modelo>.json em cache -> nem exporta áudio, usa a transcrição direto.
+        // - audio.wav em cache -> pula a exportação (lenta em sequências grandes), só transcreve.
+        // - nada em cache -> exporta e transcreve do zero, e guarda os dois para a próxima vez.
+        // Promise<{segments}>.
         function qcExportAndTranscribe(eng, preset, modelSel) {
             return new Promise(function(resolve, reject) {
-                var outWav = eng.pathMod.join(eng.os.tmpdir(), 'qc-seq-' + Date.now() + '.wav');
-                function clean() { try { eng.fs.existsSync(outWav) && eng.fs.unlinkSync(outWav); } catch (e) {} }
-                showStatus('🎚️ Exportando o áudio da sequência ativa…', 'info');
-                csInterface.evalScript('qcExportActiveAudio("' + qcEscape(preset) + '","' + qcEscape(outWav) + '")', function(expRes) {
-                    if (!expRes || expRes.indexOf('OK:') !== 0) { reject(new Error(expRes || 'Falha ao exportar o áudio.')); return; }
-                    showStatus('🎙️ Transcrevendo… (pode demorar alguns minutos)', 'info');
-                    eng.transcribe(expRes.substring(3), { onProgress: function(m) { showStatus('🎙️ ' + m, 'info'); }, model: modelSel || undefined })
-                        .then(function(res) { clean(); resolve(res); })
-                        .catch(function(e) { clean(); reject(e); });
+                csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
+                    if (!keyRes || keyRes.indexOf('OK:') !== 0) { reject(new Error(keyRes || 'Não achei a sequência ativa.')); return; }
+                    var cacheDir = eng.pathMod.join(qcCacheRoot(eng), keyRes.substring(3));
+                    if (!eng.fs.existsSync(cacheDir)) eng.fs.mkdirSync(cacheDir, { recursive: true });
+
+                    var modelPath = eng.resolveModelPath(modelSel);
+                    var modelBase = modelPath ? eng.pathMod.basename(modelPath).replace(/\.bin$/i, '') : 'default';
+                    var transcriptFile = eng.pathMod.join(cacheDir, 'transcript-' + modelBase + '.json');
+                    var audioFile = eng.pathMod.join(cacheDir, 'audio.wav');
+
+                    // 1) transcrição já em cache p/ esse modelo -> nem precisa do áudio.
+                    if (eng.fs.existsSync(transcriptFile)) {
+                        try {
+                            var cachedSegs = JSON.parse(eng.fs.readFileSync(transcriptFile, 'utf8'));
+                            showStatus('♻️ Reaproveitando transcrição já feita (cache).', 'info');
+                            resolve({ segments: cachedSegs, language: 'auto' });
+                            return;
+                        } catch (e) { /* cache corrompido: segue o fluxo normal */ }
+                    }
+
+                    function transcreverDe(mediaPath) {
+                        showStatus('🎙️ Transcrevendo… (pode demorar alguns minutos)', 'info');
+                        eng.transcribe(mediaPath, { onProgress: function(m) { showStatus('🎙️ ' + m, 'info'); }, model: modelSel || undefined })
+                            .then(function(res) {
+                                try { eng.fs.writeFileSync(transcriptFile, JSON.stringify(res.segments)); } catch (e) {}
+                                resolve(res);
+                            })
+                            .catch(reject);
+                    }
+
+                    // 2) áudio já em cache -> pula a exportação do Premiere (a parte lenta).
+                    if (eng.fs.existsSync(audioFile)) {
+                        showStatus('♻️ Reaproveitando áudio já exportado (cache).', 'info');
+                        transcreverDe(audioFile);
+                        return;
+                    }
+
+                    // 3) nada em cache -> exporta direto PARA a pasta de cache (fica salvo).
+                    showStatus('🎚️ Exportando o áudio da sequência ativa…', 'info');
+                    csInterface.evalScript('qcExportActiveAudio("' + qcEscape(preset) + '","' + qcEscape(audioFile) + '")', function(expRes) {
+                        if (!expRes || expRes.indexOf('OK:') !== 0) { reject(new Error(expRes || 'Falha ao exportar o áudio.')); return; }
+                        transcreverDe(expRes.substring(3));
+                    });
                 });
             });
         }
 
         // ---------- ⚡ Gerar cortes (Whisper offline + Gemini) ----------
         document.getElementById('qcGenBtn').addEventListener('click', function() {
+            if (!qcComecar()) return;
             var eng = qcLoadEngine(); if (!eng) return;
             var preset = qcResolvePreset(eng); if (!preset) return;
 
@@ -338,6 +490,8 @@
             var maxD = parseInt(document.getElementById('qcMax').value, 10);
             var opts = { quantidade: isNaN(qtd) ? 0 : qtd, minDur: isNaN(minD) ? 0 : minD, maxDur: isNaN(maxD) ? 0 : maxD };
 
+            opts.onProgress = function(m) { showStatus('🧠 ' + m, 'info'); };
+
             qcExportAndTranscribe(eng, preset, modelSel)
                 .then(function(res) {
                     showStatus('🧠 Pensando nos melhores cortes (Gemini)…', 'info');
@@ -346,6 +500,7 @@
                 .then(function(out) {
                     var clips = out.clips || [];
                     if (!clips.length) { showStatus('⚠️ Nenhum corte sugerido.', 'error'); return; }
+                    qcWriteViralReport(eng, clips); // best-effort, em paralelo à montagem
                     csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
                         if (!idxRes || idxRes.indexOf('OK:') !== 0) { showStatus(idxRes || '⚠️ Não achei a sequência ativa.', 'error'); return; }
                         qcBuildNext(clips, 0, 0, [], idxRes.substring(3), aspect);
@@ -354,39 +509,77 @@
                 .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
         });
 
-        // ---------- 💬 Gerar legenda (só da sequência ativa) ----------
+        // Grava "relatorio-cortes.txt" na pasta do projeto com a avaliação de
+        // viralidade que o Gemini deu a cada corte (gancho + potencial).
+        function qcWriteViralReport(eng, clips) {
+            try {
+                if (!clips.some(function(c) { return c.avaliacao; })) return;
+                csInterface.evalScript('qcProjectDir()', function(dirRes) {
+                    var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+                    var linhas = ['RELATÓRIO DE VIRALIDADE — Quarks Cuts', 'Gerado em ' + new Date().toLocaleString(), ''];
+                    for (var i = 0; i < clips.length; i++) {
+                        var c = clips[i], a = c.avaliacao || {};
+                        var num = (i + 1 < 10 ? '0' : '') + (i + 1);
+                        linhas.push(num + ' — ' + (c.titulo || 'Corte ' + (i + 1)));
+                        linhas.push('   Potencial: ' + (a.potencial_viral || 'N/A') + ' | Hook: ' + (a.hook || 'N/A'));
+                        linhas.push('');
+                    }
+                    try { eng.fs.writeFileSync(eng.pathMod.join(base, 'relatorio-cortes.txt'), linhas.join('\r\n'), 'utf8'); } catch (e) {}
+                });
+            } catch (e) { /* relatório é opcional */ }
+        }
+
+        // ---------- 💬 Legenda: pipeline comum ----------
+        // Transcreve a sequência ativa → agrupa por pontuação → corrige/traduz →
+        // alinha ao frame. Retorna Promise<caps> ([{start,end,text}], 0-based).
+        // Usado pelos dois botões: .srt e MOGRT.
+        function qcPreparaLegenda(eng, preset, modelSel, idioma) {
+            return qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
+                var words = res.segments || [];
+                if (!words.length) throw new Error('Sem fala detectada nesta sequência.');
+                var grupos = eng.srtMod.agruparPorPontuacao(words, 20);
+                if (!grupos.length) throw new Error('Legenda vazia.');
+                showStatus(idioma ? '🌐 Traduzindo a legenda…' : '📝 Corrigindo a legenda (gramática/acentuação)…', 'info');
+                return eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined }).then(function(corr) {
+                    var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
+                    return new Promise(function(resolve) {
+                        // Alinha ao frame da sequência (senão o Premiere arredonda depois).
+                        csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+                            var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
+                            resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+                        });
+                    });
+                });
+            });
+        }
+
+        // ---------- 💬 Gerar legenda .srt (arrastar na timeline) ----------
         document.getElementById('qcLegendaBtn').addEventListener('click', function() {
+            if (!qcComecar()) return;
             var eng = qcLoadEngine(); if (!eng) return;
             var preset = qcResolvePreset(eng); if (!preset) return;
             var modelSel = document.getElementById('qcQuality').value;
+            var idioma = document.getElementById('qcLegIdioma').value; // '' = original
 
-            qcExportAndTranscribe(eng, preset, modelSel)
-                .then(function(res) {
-                    var words = res.segments || [];
-                    if (!words.length) { showStatus('⚠️ Sem fala detectada nesta sequência.', 'error'); return; }
-                    // Reagrupa as palavras em legendas curtas, quebrando na pontuação.
-                    var grupos = eng.srtMod.agruparPorPontuacao(words, 20);
-                    if (!grupos.length) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
-                    showStatus('📝 Corrigindo a legenda (gramática/acentuação)…', 'info');
-                    return eng.corrigirLegendas(grupos.map(function(c) { return c.text; })).then(function(corr) {
-                        // O áudio exportado JÁ é o corte → tempos 0-based, sem re-base.
-                        var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
-                        var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], caps);
-                        if (!srtStr.trim()) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
-                        csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
-                            var nome = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'legenda';
-                            csInterface.evalScript('qcProjectDir()', function(dirRes) {
-                                var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
-                                var outDir = eng.pathMod.join(base, 'legendas');
-                                var file = eng.pathMod.join(outDir, qcSanitizeFile(nome) + '.srt');
-                                try {
-                                    if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true });
-                                    eng.fs.writeFileSync(file, srtStr, 'utf8');
-                                } catch (e) { showStatus('⚠️ Erro ao salvar o .srt: ' + (e.message || e), 'error'); return; }
-                                csInterface.evalScript('qcImportLegendas("' + qcEscape(file) + '")', function(impRes) {
-                                    var imported = (impRes && impRes.indexOf('SUCCESS:') === 0);
-                                    showStatus('✓ Legenda gerada: ' + file + (imported ? ' (importada na bin "legendas").' : ' (importe manualmente).'), 'success');
-                                });
+            qcPreparaLegenda(eng, preset, modelSel, idioma)
+                .then(function(caps) {
+                    var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], caps);
+                    if (!srtStr.trim()) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
+                    csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
+                        var nome = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'legenda';
+                        csInterface.evalScript('qcProjectDir()', function(dirRes) {
+                            var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+                            var outDir = eng.pathMod.join(base, 'legendas');
+                            // legenda traduzida ganha sufixo do idioma (não sobrescreve a original)
+                            var sufixo = idioma ? '.' + idioma : '';
+                            var file = eng.pathMod.join(outDir, qcSanitizeFile(nome) + sufixo + '.srt');
+                            try {
+                                if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true });
+                                eng.fs.writeFileSync(file, srtStr, 'utf8');
+                            } catch (e) { showStatus('⚠️ Erro ao salvar o .srt: ' + (e.message || e), 'error'); return; }
+                            csInterface.evalScript('qcImportLegendas("' + qcEscape(file) + '")', function(impRes) {
+                                var imported = (impRes && impRes.indexOf('SUCCESS:') === 0);
+                                showStatus('✓ Legenda gerada: ' + file + (imported ? ' (importada na bin "legendas").' : ' (importe manualmente).'), 'success');
                             });
                         });
                     });
@@ -394,8 +587,90 @@
                 .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
         });
 
+        // ---------- 🎨 Legenda estilizada (MOGRT direto na timeline) ----------
+        // Usa um modelo .mogrt (o padrão de podcast de vocês, exportado do Essential
+        // Graphics) e insere um gráfico por legenda na trilha de cima do corte.
+        function qcResolveMogrt(eng) {
+            var p = eng.cfg.mogrt_path || '';
+            if (p && !eng.pathMod.isAbsolute(p)) p = eng.pathMod.join(eng.extRoot, p);
+            if (p && eng.fs.existsSync(p)) return p;
+            showStatus('📂 Selecione o modelo .mogrt da legenda (padrão do podcast)…', 'info');
+            var dlg;
+            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o .mogrt da legenda', '', ['mogrt']); }
+            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return null; }
+            if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return null; }
+            p = dlg.data[0];
+            eng.cfg.mogrt_path = p;
+            try { eng.fs.writeFileSync(eng.cfgPath, JSON.stringify(eng.cfg, null, 2)); } catch (e) {}
+            return p;
+        }
+
+        document.getElementById('qcMogrtBtn').addEventListener('click', function() {
+            if (!qcComecar()) return;
+            var eng = qcLoadEngine(); if (!eng) return;
+            var preset = qcResolvePreset(eng); if (!preset) return;
+            var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
+            var modelSel = document.getElementById('qcQuality').value;
+            var idioma = document.getElementById('qcLegIdioma').value;
+            var textParam = eng.cfg.mogrt_text_param || 'Source Text';
+
+            qcPreparaLegenda(eng, preset, modelSel, idioma)
+                .then(function(caps) {
+                    showStatus('🎨 Inserindo ' + caps.length + ' legenda(s) estilizada(s) na timeline…', 'info');
+                    var payload = {
+                        mogrt: mogrt,
+                        param: textParam,
+                        caps: caps.map(function(c) { return { s: c.start, e: c.end, t: c.text }; })
+                    };
+                    // JSON duplo-serializado: vira uma string literal segura dentro do evalScript.
+                    csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
+                        if (res && res.indexOf('SUCCESS:') === 0) showStatus('✓ ' + res.substring(9), 'success');
+                        else showStatus(res || '⚠️ Falha ao inserir os gráficos.', 'error');
+                    });
+                })
+                .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
+        });
+
+        // ---------- 🎨 MOGRTs a partir de um .srt ajustado ----------
+        // Fluxo: a pessoa ajusta a legenda na timeline → exporta o SRT pelo painel
+        // Texto do Premiere → este botão lê o arquivo e insere os MOGRTs nos tempos
+        // AJUSTADOS. Não transcreve nada — é instantâneo e offline.
+        document.getElementById('qcMogrtSrtBtn').addEventListener('click', function() {
+            if (!qcComecar()) return;
+            var eng = qcLoadEngine(); if (!eng) return;
+            var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
+            var textParam = eng.cfg.mogrt_text_param || 'Source Text';
+
+            showStatus('📂 Selecione o .srt (ajustado) da legenda…', 'info');
+            var dlg;
+            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o .srt da legenda ajustada', '', ['srt']); }
+            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return; }
+            if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return; }
+
+            var caps;
+            try { caps = eng.srtMod.parseSrtContent(eng.fs.readFileSync(dlg.data[0], 'utf8')); }
+            catch (e) { showStatus('⚠️ Erro ao ler o .srt: ' + (e.message || e), 'error'); return; }
+            if (!caps.length) { showStatus('⚠️ Nenhuma legenda válida no arquivo.', 'error'); return; }
+
+            csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+                var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
+                if (fps > 0) caps = eng.srtMod.snapToFrames(caps, fps);
+                showStatus('🎨 Inserindo ' + caps.length + ' legenda(s) estilizada(s) na timeline…', 'info');
+                var payload = {
+                    mogrt: mogrt,
+                    param: textParam,
+                    caps: caps.map(function(c) { return { s: c.start, e: c.end, t: c.text }; })
+                };
+                csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
+                    if (res && res.indexOf('SUCCESS:') === 0) showStatus('✓ ' + res.substring(9), 'success');
+                    else showStatus(res || '⚠️ Falha ao inserir os gráficos.', 'error');
+                });
+            });
+        });
+
         // ---------- 🪺 Desaninhar ----------
         document.getElementById('qcUnnestBtn').addEventListener('click', function() {
+            if (!qcComecar()) return;
             showStatus('🪺 Desaninhando a sequência ativa…', 'info');
             csInterface.evalScript('quarksUnnestActive()', function(result) {
                 if (result.indexOf('ERROR:') === 0) showStatus(result, 'error');
@@ -404,8 +679,25 @@
             });
         });
 
+        // Rede de segurança: some silenciosamente com .wav órfãos antigos (>3h) no TEMP,
+        // sobras de execuções que não terminaram limpo (Premiere fechado no meio, etc.).
+        function qcSweepOrphanedTemp() {
+            if (typeof require === 'undefined') return;
+            try {
+                var fs = require('fs'), pathMod = require('path'), os = require('os');
+                var tmp = os.tmpdir();
+                var cutoff = Date.now() - 3 * 60 * 60 * 1000;
+                fs.readdirSync(tmp).forEach(function(n) {
+                    if (!/^qc-.*\.wav$/i.test(n)) return;
+                    var fp = pathMod.join(tmp, n);
+                    try { if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp); } catch (e) {}
+                });
+            } catch (e) { /* best-effort, não bloqueia o painel */ }
+        }
+
         window.addEventListener('load', function() {
             qcRefreshSources();
+            qcSweepOrphanedTemp();
             showStatus('Pronto. Abra a sequência e gere os cortes.', 'info');
         });
     </script>

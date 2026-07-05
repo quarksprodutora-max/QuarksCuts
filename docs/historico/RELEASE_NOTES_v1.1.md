@@ -1,3 +1,8 @@
+> **Histórico.** Notas de release do projeto original **Clip Assassin** (upstream,
+> [Uhlovic/Clip_Assassin](https://github.com/Uhlovic/Clip_Assassin)), ponto de partida
+> deste fork antes das mudanças do Quarks Cuts (Whisper + Gemini, legendas, unnest).
+> Para o changelog atual, veja [`/CHANGELOG.md`](../../CHANGELOG.md).
+
 # 🎉 Clip Assassin v1.1.0 - Frame-Perfect Edition
 
 **Release Date:** November 21, 2025

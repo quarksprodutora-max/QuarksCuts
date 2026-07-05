@@ -10,10 +10,11 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { qcLog } = require('./log.js');
 
 // curl.exe nativo do Windows (10/11). Roda como PROCESSO SEPARADO, então passa
 // pelo firewall mesmo quando o Premiere.exe está bloqueado de acessar a internet
-// (ex.: instalação não-oficial). É o mesmo motivo de ffmpeg/whisper funcionarem.
+// por firewall/antivírus. É o mesmo motivo de ffmpeg/whisper funcionarem.
 const CURL = (process.env.SystemRoot || 'C:\\Windows') + '\\System32\\curl.exe';
 
 function loadConfig() {
@@ -91,7 +92,11 @@ function postGemini(model, apiKey, bodyObj) {
       }
       throw new Error('Falha de rede ao chamar o Gemini: ' + (e && e.message ? e.message : e));
     }
-    if (res.status >= 200 && res.status < 300) return res.body;
+    if (res.status >= 200 && res.status < 300) {
+      qcLog('gemini', model + ' HTTP ' + res.status + ' (tentativa ' + tries + ')');
+      return res.body;
+    }
+    qcLog('gemini', model + ' HTTP ' + res.status + ' (tentativa ' + tries + '): ' + String(res.body).slice(0, 150));
     if ([429, 500, 503].indexOf(res.status) !== -1 && tries < MAX_TRIES) {
       const m = /retry in (\d+(?:\.\d+)?)s/i.exec(res.body);
       const w = m ? Math.min(parseFloat(m[1]) * 1000 + 800, 60000) : delay(tries);
@@ -119,8 +124,10 @@ async function callGemini(models, apiKey, bodyObj) {
       lastErr = e;
       // só vale a pena trocar de modelo em erro de disponibilidade/limite
       if (!/erro (429|500|503)|Falha de rede/.test(e.message)) throw e;
+      if (i + 1 < models.length) qcLog('gemini', 'fallback de modelo: ' + models[i] + ' -> ' + models[i + 1]);
     }
   }
+  qcLog('gemini', 'todos os modelos falharam: ' + (lastErr && lastErr.message));
   throw lastErr || new Error('Gemini indisponível.');
 }
 
@@ -132,10 +139,10 @@ function modelList(cfg) {
   return list;
 }
 
-// Monta a transcrição compacta "[ini-fim] texto" (segundos, 1 casa).
-// Os segmentos vêm curtos (<=25 chars); agrupamos em blocos de ~200 chars
+// Monta a transcrição compacta como LINHAS "[ini-fim] texto" (segundos, 1 casa).
+// Os segmentos vêm curtos (nível palavra); agrupamos em blocos de ~200 chars
 // para reduzir o tamanho do contexto enviado ao Gemini.
-function buildTranscript(segments) {
+function buildTranscriptLines(segments) {
   const lines = [];
   let bufText = '', bufStart = null, bufEnd = null;
   function flush() {
@@ -150,10 +157,65 @@ function buildTranscript(segments) {
     if (bufText.length >= 200) flush();
   }
   flush();
-  return lines.join('\n');
+  return lines;
+}
+
+// Divide as linhas em pedaços com sobreposição (padrão do clipper.py do VoxFlow:
+// episódios longos estouram o tamanho de RESPOSTA do modelo — pedir muitos cortes
+// de uma transcrição gigante devolve JSON truncado). ~300 linhas ≈ 60k chars.
+const CHUNK_LINES = 300;
+const CHUNK_OVERLAP = 20;
+
+function chunkLines(lines) {
+  const chunks = [];
+  if (!lines.length) return chunks;
+  let start = 0;
+  while (start < lines.length) {
+    const end = start + CHUNK_LINES;
+    chunks.push(lines.slice(start, end));
+    if (end >= lines.length) break;
+    start = end - CHUNK_OVERLAP;
+  }
+  return chunks;
+}
+
+// Resgata cortes completos de um JSON truncado (resposta cortada no meio) —
+// varredura por profundidade de chaves dentro do array "clips", portada do
+// recover_partial_clips do VoxFlow. Sem isso, um corte incompleto no fim da
+// resposta perderia TODOS os cortes do chunk.
+function recoverPartialClips(raw) {
+  const recovered = [];
+  const arrayStart = raw.indexOf('"clips"');
+  if (arrayStart === -1) return recovered;
+  const bracketStart = raw.indexOf('[', arrayStart);
+  if (bracketStart === -1) return recovered;
+
+  let depth = 0, inString = false, escapeNext = false, objStart = null;
+  for (let i = bracketStart; i < raw.length; i++) {
+    const ch = raw[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (ch === '\\' && inString) { escapeNext = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== null) {
+        try {
+          const obj = JSON.parse(raw.slice(objStart, i + 1));
+          if (obj.titulo && obj.segmentos) recovered.push(obj);
+        } catch (e) { /* objeto quebrado: ignora */ }
+        objStart = null;
+      }
+    }
+  }
+  return recovered;
 }
 
 // Saneia/normaliza a resposta do Gemini no schema do painel.
+// Preserva a avaliação de viralidade (usada no relatório dos cortes).
 function normalizeClips(parsed) {
   const out = [];
   const clips = (parsed && parsed.clips) || [];
@@ -166,7 +228,13 @@ function normalizeClips(parsed) {
       const fim = parseFloat(segs[j].fim);
       if (!isNaN(ini) && !isNaN(fim) && fim > ini) norm.push({ inicio: ini, fim: fim });
     }
-    if (norm.length > 0) out.push({ titulo: c.titulo || ('Corte ' + (i + 1)), segmentos: norm });
+    if (norm.length > 0) {
+      out.push({
+        titulo: c.titulo || ('Corte ' + (i + 1)),
+        avaliacao: c.avaliacao || null,
+        segmentos: norm,
+      });
+    }
   }
   return out;
 }
@@ -180,7 +248,29 @@ function extractText(raw) {
     data.candidates[0].content.parts[0]) ? data.candidates[0].content.parts[0].text : '';
 }
 
-// gerarCortes(segments, { quantidade, minDur, maxDur }) -> Promise<{ clips: [...] }>
+function buildPrompt(transcript, alvo, minD, maxD) {
+  return (
+    'Você é um Especialista em Estratégia de Conteúdo Viral e Editor Sênior de cortes (clips) brasileiro, com experiência comprovada em TikTok, Reels e Shorts.\n' +
+    'Abaixo está a TRANSCRIÇÃO do episódio, uma linha por trecho no formato "[inicio-fim] texto", onde inicio e fim são SEGUNDOS do vídeo original.\n\n' +
+    'Tarefa: escolha ' + alvo + ' cortes virais e autossuficientes, cada um com ' + minD + ' a ' + maxD + ' segundos de duração total.\n' +
+    'Regras:\n' +
+    '- Cada corte deve fazer sentido sozinho, com começo e fim de raciocínio.\n' +
+    '- Comece pelo GANCHO mais forte: a ordem dos segmentos dentro do corte é a ordem em que aparecerão (pode reordenar para o gancho vir primeiro).\n' +
+    '- PRIORIZE: opiniões fortes/polêmicas, histórias pessoais impactantes, revelações, dicas acionáveis e insights contra-intuitivos.\n' +
+    '- Use os timestamps REAIS da transcrição; não invente tempos.\n' +
+    '- Um corte pode juntar mais de um trecho (vários segmentos), mas mantenha-o coeso.\n' +
+    '- Você PODE reutilizar um mesmo trecho forte em cortes diferentes.\n' +
+    '- titulo: chamada curta e atrativa em pt-BR (sem hashtags).\n' +
+    '- avaliacao: nota do gancho ("hook", ex.: "9/10 - abre com pergunta que prende") e "potencial_viral" ("Muito Alta", "Alta", "Média" ou "Baixa").\n\n' +
+    'Responda APENAS em JSON válido, sem markdown, no formato exato:\n' +
+    '{"clips":[{"titulo":"...","avaliacao":{"hook":"...","potencial_viral":"..."},"segmentos":[{"inicio":12.3,"fim":58.7}]}]}\n\n' +
+    'TRANSCRIÇÃO:\n"""\n' + transcript + '\n"""'
+  );
+}
+
+// gerarCortes(segments, { quantidade, minDur, maxDur, onProgress }) -> Promise<{ clips: [...] }>
+// Episódios longos são processados em CHUNKS (com sobreposição) e os cortes
+// somados — evita resposta truncada do modelo em transcrições gigantes.
 async function gerarCortes(segments, opts) {
   opts = opts || {};
   const cfg = loadConfig();
@@ -189,41 +279,68 @@ async function gerarCortes(segments, opts) {
     throw new Error('Defina gemini_api_key em engine/config.json.');
   }
 
-  const alvo = (opts.quantidade && opts.quantidade > 0) ? ('EXATAMENTE ' + opts.quantidade) : 'de 5 a 12';
   const minD = opts.minDur && opts.minDur > 0 ? opts.minDur : 20;
   const maxD = opts.maxDur && opts.maxDur > 0 ? opts.maxDur : 90;
-  const transcript = buildTranscript(segments);
+  const lines = buildTranscriptLines(segments);
+  const chunks = chunkLines(lines);
 
-  const prompt =
-    'Você é um editor de cortes (clips) brasileiro especialista em podcasts/entrevistas para Reels, TikTok e Shorts.\n' +
-    'Abaixo está a TRANSCRIÇÃO do episódio, uma linha por trecho no formato "[inicio-fim] texto", onde inicio e fim são SEGUNDOS do vídeo original.\n\n' +
-    'Tarefa: escolha ' + alvo + ' cortes virais e autossuficientes, cada um com ' + minD + ' a ' + maxD + ' segundos de duração total.\n' +
-    'Regras:\n' +
-    '- Cada corte deve fazer sentido sozinho, com começo e fim de raciocínio.\n' +
-    '- Comece pelo GANCHO mais forte: a ordem dos segmentos dentro do corte é a ordem em que aparecerão (pode reordenar para o gancho vir primeiro).\n' +
-    '- Use os timestamps REAIS da transcrição; não invente tempos.\n' +
-    '- Um corte pode juntar mais de um trecho (vários segmentos), mas mantenha-o coeso.\n' +
-    '- titulo: chamada curta e atrativa em pt-BR (sem hashtags).\n\n' +
-    'Responda APENAS em JSON válido, sem markdown, no formato exato:\n' +
-    '{"clips":[{"titulo":"...","segmentos":[{"inicio":12.3,"fim":58.7}]}]}\n\n' +
-    'TRANSCRIÇÃO:\n"""\n' + transcript + '\n"""';
+  const total = opts.quantidade && opts.quantidade > 0 ? opts.quantidade : 0;
+  const perChunk = total > 0 ? Math.ceil(total / chunks.length) : 0;
+  const alvo = perChunk > 0 ? ('EXATAMENTE ' + perChunk) : 'de 5 a 12';
 
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
-  };
+  qcLog('cortes', 'INÍCIO — ' + lines.length + ' blocos de transcrição em ' + chunks.length + ' chunk(s), alvo: ' + alvo);
+  let clips = [];
+  let lastErr = null;
+  for (let c = 0; c < chunks.length; c++) {
+    if (opts.onProgress && chunks.length > 1) opts.onProgress('Analisando parte ' + (c + 1) + '/' + chunks.length + '…');
+    if (c > 0) await wait(3000); // respiro entre chunks p/ não bater rate limit
+    const body = {
+      contents: [{ parts: [{ text: buildPrompt(chunks[c].join('\n'), alvo, minD, maxD) }] }],
+      generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
+    };
+    let text = '';
+    try {
+      text = extractText(await callGemini(modelList(cfg), apiKey, body));
+    } catch (e) {
+      lastErr = e;
+      qcLog('cortes', 'chunk ' + (c + 1) + ' FALHOU: ' + e.message);
+      continue; // um chunk falhou; os outros ainda podem render cortes
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      // resposta truncada: resgata os cortes completos em vez de perder o chunk
+      parsed = { clips: recoverPartialClips(text) };
+      qcLog('cortes', 'chunk ' + (c + 1) + ' com JSON truncado — recuperados ' + parsed.clips.length + ' corte(s)');
+    }
+    clips = clips.concat(normalizeClips(parsed));
+  }
+  qcLog('cortes', 'FIM — ' + clips.length + ' corte(s) no total');
 
-  const raw = await callGemini(modelList(cfg), apiKey, body);
-  let parsed;
-  try { parsed = JSON.parse(extractText(raw)); } catch (e) { throw new Error('O Gemini não retornou JSON de cortes válido.'); }
-  const clips = normalizeClips(parsed);
-  if (clips.length === 0) throw new Error('O Gemini não encontrou cortes utilizáveis.');
+  if (clips.length === 0) {
+    if (lastErr) throw lastErr;
+    throw new Error('O Gemini não encontrou cortes utilizáveis.');
+  }
+  if (total > 0 && clips.length > total) clips = clips.slice(0, total);
   return { clips: clips };
 }
 
-// corrigirLegendas(textos[]) -> Promise<string[]> (mesma quantidade/ordem).
-// Corrige ortografia/acentuação SEM juntar/dividir linhas (preserva o timing).
-async function corrigirLegendas(textos) {
+// Idiomas suportados no dropdown de legenda (código → nome usado no prompt).
+const IDIOMAS = {
+  pt: 'português do Brasil',
+  en: 'inglês',
+  es: 'espanhol',
+  fr: 'francês',
+  it: 'italiano',
+};
+
+// corrigirLegendas(textos[], { idioma }) -> Promise<string[]> (mesma quantidade/ordem).
+// Sem idioma: corrige ortografia/acentuação. Com idioma ('en', 'es'...): TRADUZ
+// linha a linha para o idioma-alvo. Nos dois casos as linhas não são juntadas
+// nem divididas — o timing da legenda original é preservado.
+async function corrigirLegendas(textos, opts) {
+  opts = opts || {};
   const cfg = loadConfig();
   const apiKey = cfg.gemini_api_key;
   if (!apiKey || apiKey.indexOf('COLE_SUA_CHAVE') === 0) {
@@ -231,14 +348,22 @@ async function corrigirLegendas(textos) {
   }
   if (!textos || !textos.length) return [];
 
+  const alvo = opts.idioma && IDIOMAS[opts.idioma] ? IDIOMAS[opts.idioma] : null;
+  qcLog('legenda', (alvo ? 'TRADUÇÃO para ' + alvo : 'correção pt-BR') + ' — ' + textos.length + ' linhas');
+
   const numbered = textos.map((t, i) => i + '\t' + t).join('\n');
+  const tarefa = alvo
+    ? 'TRADUZA as legendas abaixo para ' + alvo + ', linha a linha. As linhas são trechos ' +
+      'CONSECUTIVOS da mesma fala (leia todas para entender o contexto antes de traduzir). ' +
+      'Distribua a tradução de forma natural entre as linhas, respeitando a ordem temporal da fala.\n'
+    : 'Corrija ortografia, acentuação e pontuação leve das legendas abaixo, em pt-BR.\n';
   const prompt =
-    'Corrija ortografia, acentuação e pontuação leve das legendas abaixo, em pt-BR.\n' +
+    tarefa +
     'REGRAS IMPORTANTES:\n' +
     '- NÃO junte nem divida linhas: a saída tem EXATAMENTE a mesma quantidade de itens, na mesma ordem.\n' +
     '- Mantenha cada linha curta (máx ~25 caracteres). Não adicione comentários.\n' +
-    '- Corrija só o texto; não traduza, não reescreva o sentido.\n\n' +
-    'Entrada (uma por linha, "indice<TAB>texto"):\n' + numbered + '\n\n' +
+    (alvo ? '- Traduza o sentido com naturalidade; não deixe nada no idioma original.\n' : '- Corrija só o texto; não traduza, não reescreva o sentido.\n') +
+    '\nEntrada (uma por linha, "indice<TAB>texto"):\n' + numbered + '\n\n' +
     'Responda APENAS em JSON: {"linhas":[{"i":0,"texto":"..."}, ...]}';
 
   const body = {

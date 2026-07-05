@@ -49,6 +49,27 @@ function agruparPorPontuacao(words, maxChars) {
   return out;
 }
 
+// Alinha os tempos das legendas às fronteiras de FRAME da sequência.
+// O Premiere só posiciona legendas em frames inteiros: tempos "quebrados" no SRT
+// são arredondados na importação (até ±meio frame, às vezes pro lado errado).
+// Pré-alinhando aqui, a importação vira exata. Garante também duração mínima de
+// 1 frame e nenhuma sobreposição entre legendas vizinhas.
+function snapToFrames(caps, fps) {
+  if (!fps || fps <= 0 || !caps || !caps.length) return caps;
+  const dur = 1 / fps;
+  const out = [];
+  let prevEnd = 0;
+  for (let i = 0; i < caps.length; i++) {
+    let s = Math.round(caps[i].start / dur) * dur;
+    let e = Math.round(caps[i].end / dur) * dur;
+    if (s < prevEnd) s = prevEnd;          // não sobrepõe a legenda anterior
+    if (e < s + dur) e = s + dur;          // pelo menos 1 frame de duração
+    out.push({ start: s, end: e, text: caps[i].text });
+    prevEnd = e;
+  }
+  return out;
+}
+
 // Monta o texto SRT de UM corte.
 // segmentos: [{inicio, fim}] em SEGUNDOS da timeline original, na ordem do corte.
 // captionSegs: [{start, end, text}] em SEGUNDOS da timeline original (ordenados).
@@ -112,4 +133,28 @@ function gerarLegendas(items, captionSegs, outDir) {
   return { dir: outDir, files: files };
 }
 
-module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao };
+// Faz o caminho inverso: lê um arquivo .srt (ex.: legendas AJUSTADAS na timeline
+// e exportadas pelo painel Texto do Premiere) e devolve [{start,end,text}] em
+// segundos. Linhas múltiplas de uma legenda são unidas com espaço.
+function parseSrtContent(content) {
+  const caps = [];
+  const blocks = String(content).replace(/\r/g, '').split(/\n\n+/);
+  const timeRe = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
+  for (let b = 0; b < blocks.length; b++) {
+    const lines = blocks[b].split('\n').filter(function (l) { return l.trim() !== ''; });
+    if (!lines.length) continue;
+    let ti = -1, m = null;
+    for (let i = 0; i < lines.length && ti === -1; i++) {
+      m = timeRe.exec(lines[i]);
+      if (m) ti = i;
+    }
+    if (ti === -1) continue;
+    const start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4].padEnd(3, '0')) / 1000;
+    const end = (+m[5]) * 3600 + (+m[6]) * 60 + (+m[7]) + (+m[8].padEnd(3, '0')) / 1000;
+    const text = lines.slice(ti + 1).join(' ').trim();
+    if (text && end > start) caps.push({ start: start, end: end, text: text });
+  }
+  return caps;
+}
+
+module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, snapToFrames, parseSrtContent };
