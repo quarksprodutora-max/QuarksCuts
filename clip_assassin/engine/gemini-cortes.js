@@ -232,6 +232,7 @@ function normalizeClips(parsed) {
       out.push({
         titulo: c.titulo || ('Corte ' + (i + 1)),
         avaliacao: c.avaliacao || null,
+        legenda_ig: c.legenda_ig || '',
         segmentos: norm,
       });
     }
@@ -250,20 +251,26 @@ function extractText(raw) {
 
 function buildPrompt(transcript, alvo, minD, maxD) {
   return (
-    'Você é um Especialista em Estratégia de Conteúdo Viral e Editor Sênior de cortes (clips) brasileiro, com experiência comprovada em TikTok, Reels e Shorts.\n' +
+    'Você é um Especialista em Estratégia de Conteúdo Viral e Editor Sênior de cortes (clips) brasileiro, com experiência comprovada em TikTok, Reels e Shorts. Seu objetivo: cortes que capturam a atenção nos primeiros segundos, geram curiosidade, incentivam compartilhamento e levam tráfego ao episódio completo.\n' +
     'Abaixo está a TRANSCRIÇÃO do episódio, uma linha por trecho no formato "[inicio-fim] texto", onde inicio e fim são SEGUNDOS do vídeo original.\n\n' +
-    'Tarefa: escolha ' + alvo + ' cortes virais e autossuficientes, cada um com ' + minD + ' a ' + maxD + ' segundos de duração total.\n' +
-    'Regras:\n' +
-    '- Cada corte deve fazer sentido sozinho, com começo e fim de raciocínio.\n' +
-    '- Comece pelo GANCHO mais forte: a ordem dos segmentos dentro do corte é a ordem em que aparecerão (pode reordenar para o gancho vir primeiro).\n' +
-    '- PRIORIZE: opiniões fortes/polêmicas, histórias pessoais impactantes, revelações, dicas acionáveis e insights contra-intuitivos.\n' +
-    '- Use os timestamps REAIS da transcrição; não invente tempos.\n' +
-    '- Um corte pode juntar mais de um trecho (vários segmentos), mas mantenha-o coeso.\n' +
-    '- Você PODE reutilizar um mesmo trecho forte em cortes diferentes.\n' +
+    'Tarefa: crie ' + alvo + ' cortes virais e autossuficientes, cada um com ' + minD + ' a ' + maxD + ' segundos de duração total.\n\n' +
+    'REGRA DE OURO — GANCHO PRIMEIRO (OBRIGATÓRIA EM TODO CORTE):\n' +
+    'O primeiro segmento de CADA corte deve ser um GANCHO de 3 a 8 segundos retirado do momento mais impactante do assunto — MESMO que no episódio ele apareça depois. Reordene: gancho primeiro, desenvolvimento depois. Um corte com um único segmento contínuo, sem gancho reposicionado, SÓ é aceitável se o trecho já começar naturalmente com uma frase de impacto.\n' +
+    'Tipos de gancho que funcionam: declaração controversa/polarizadora; pergunta instigante que o público já se fez; dado ou fato chocante; história começando no meio da tensão; promessa clara de valor ("você nunca mais vai ver X do mesmo jeito").\n' +
+    'Continuidade: se o gancho for um trecho deslocado, os segmentos seguintes devem retomar o contexto de forma orgânica, chegando de volta ao ponto do gancho para fechar o raciocínio (o espectador precisa sentir que a promessa do gancho foi cumprida).\n\n' +
+    'EDIÇÃO NÃO-LINEAR E DINÂMICA:\n' +
+    '- Não se prenda à ordem cronológica: monte a melhor narrativa possível com 2 a 5 segmentos por corte.\n' +
+    '- Elimine pausas, hesitações e enrolação: prefira vários segmentos curtos e densos a um bloco longo com partes mortas.\n' +
+    '- O corte deve construir uma ideia e culminar num ponto-chave (pode terminar com gancho de curiosidade para o episódio completo).\n' +
+    '- PRIORIZE: opiniões fortes, histórias pessoais impactantes, revelações/segredos, dicas acionáveis, dados surpreendentes e insights contra-intuitivos.\n' +
+    '- Você PODE reutilizar um mesmo trecho forte em cortes diferentes.\n\n' +
+    'REGRAS TÉCNICAS:\n' +
+    '- Use os timestamps REAIS da transcrição; não invente tempos. Cada segmento deve começar/terminar em fronteiras naturais de fala.\n' +
     '- titulo: chamada curta e atrativa em pt-BR (sem hashtags).\n' +
-    '- avaliacao: nota do gancho ("hook", ex.: "9/10 - abre com pergunta que prende") e "potencial_viral" ("Muito Alta", "Alta", "Média" ou "Baixa").\n\n' +
+    '- avaliacao: "hook" (nota + justificativa curta, ex.: "9/10 - abre com pergunta que prende") e "potencial_viral" ("Muito Alta", "Alta", "Média" ou "Baixa").\n' +
+    '- legenda_ig: legenda pronta para postar o corte no Instagram Reels, em pt-BR: 1-3 frases envolventes + CTA para ouvir o episódio completo + 4 a 6 hashtags relevantes.\n\n' +
     'Responda APENAS em JSON válido, sem markdown, no formato exato:\n' +
-    '{"clips":[{"titulo":"...","avaliacao":{"hook":"...","potencial_viral":"..."},"segmentos":[{"inicio":12.3,"fim":58.7}]}]}\n\n' +
+    '{"clips":[{"titulo":"...","avaliacao":{"hook":"...","potencial_viral":"..."},"legenda_ig":"...","segmentos":[{"inicio":12.3,"fim":58.7}]}]}\n\n' +
     'TRANSCRIÇÃO:\n"""\n' + transcript + '\n"""'
   );
 }
@@ -284,9 +291,18 @@ async function gerarCortes(segments, opts) {
   const lines = buildTranscriptLines(segments);
   const chunks = chunkLines(lines);
 
+  // Duração total da fala: vídeos de 1h+ têm material de sobra — sem quantidade
+  // definida, garante um MÍNIMO de 20 cortes (pedido da produção).
+  const durTotal = segments.length ? segments[segments.length - 1].end : 0;
   const total = opts.quantidade && opts.quantidade > 0 ? opts.quantidade : 0;
-  const perChunk = total > 0 ? Math.ceil(total / chunks.length) : 0;
-  const alvo = perChunk > 0 ? ('EXATAMENTE ' + perChunk) : 'de 5 a 12';
+  let alvo;
+  if (total > 0) {
+    alvo = 'EXATAMENTE ' + Math.ceil(total / chunks.length);
+  } else if (durTotal > 3600) {
+    alvo = 'PELO MENOS ' + Math.ceil(20 / chunks.length);
+  } else {
+    alvo = 'de 5 a 12';
+  }
 
   qcLog('cortes', 'INÍCIO — ' + lines.length + ' blocos de transcrição em ' + chunks.length + ' chunk(s), alvo: ' + alvo);
   let clips = [];

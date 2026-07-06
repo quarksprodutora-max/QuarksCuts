@@ -509,22 +509,48 @@
                 .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
         });
 
-        // Grava "relatorio-cortes.txt" na pasta do projeto com a avaliação de
-        // viralidade que o Gemini deu a cada corte (gancho + potencial).
+        // Formata segundos como HH:MM:SS (p/ o relatório).
+        function qcHms(sec) {
+            sec = Math.max(0, Math.floor(sec));
+            var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+            function p2(n) { return (n < 10 ? '0' : '') + n; }
+            return p2(h) + ':' + p2(m) + ':' + p2(s);
+        }
+
+        // Grava "relatorio-cortes.txt" na pasta do projeto: um dossiê por corte —
+        // título, avaliação de viralidade, mapa de tempos dos segmentos e a
+        // LEGENDA pronta para postar no Instagram (com CTA e hashtags).
         function qcWriteViralReport(eng, clips) {
             try {
-                if (!clips.some(function(c) { return c.avaliacao; })) return;
+                if (!clips.length) return;
                 csInterface.evalScript('qcProjectDir()', function(dirRes) {
                     var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
-                    var linhas = ['RELATÓRIO DE VIRALIDADE — Quarks Cuts', 'Gerado em ' + new Date().toLocaleString(), ''];
+                    var L = ['════════════════════════════════════════════',
+                             ' RELATÓRIO DE CORTES — Quarks Cuts',
+                             ' Gerado em ' + new Date().toLocaleString(),
+                             ' ' + clips.length + ' corte(s)',
+                             '════════════════════════════════════════════', ''];
                     for (var i = 0; i < clips.length; i++) {
                         var c = clips[i], a = c.avaliacao || {};
                         var num = (i + 1 < 10 ? '0' : '') + (i + 1);
-                        linhas.push(num + ' — ' + (c.titulo || 'Corte ' + (i + 1)));
-                        linhas.push('   Potencial: ' + (a.potencial_viral || 'N/A') + ' | Hook: ' + (a.hook || 'N/A'));
-                        linhas.push('');
+                        var dur = qcClipDuration(c);
+                        L.push('──────────────────────────────────────────');
+                        L.push(num + ' — ' + (c.titulo || 'Corte ' + (i + 1)) + '  (' + Math.round(dur) + 's)');
+                        L.push('Potencial: ' + (a.potencial_viral || 'N/A') + ' | Hook: ' + (a.hook || 'N/A'));
+                        L.push('');
+                        L.push('MAPA DE EDIÇÃO (tempos do episódio original):');
+                        var segs = c.segmentos || [];
+                        for (var j = 0; j < segs.length; j++) {
+                            var st = qcToSeconds(segs[j].inicio), en = qcToSeconds(segs[j].fim);
+                            L.push('  ' + (j + 1) + (j === 0 ? ' (GANCHO)' : '') + ': ' + qcHms(st) + ' → ' + qcHms(en));
+                        }
+                        L.push('');
+                        L.push('LEGENDA PARA REDES SOCIAIS:');
+                        L.push(c.legenda_ig ? c.legenda_ig : '(não gerada)');
+                        L.push('');
                     }
-                    try { eng.fs.writeFileSync(eng.pathMod.join(base, 'relatorio-cortes.txt'), linhas.join('\r\n'), 'utf8'); } catch (e) {}
+                    var file = eng.pathMod.join(base, 'relatorio-cortes.txt');
+                    try { eng.fs.writeFileSync(file, L.join('\r\n'), 'utf8'); qcPanelLog('relatório gravado: ' + file); } catch (e) {}
                 });
             } catch (e) { /* relatório é opcional */ }
         }

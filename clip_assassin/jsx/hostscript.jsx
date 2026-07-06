@@ -691,7 +691,9 @@ function quarksCutsBuild(name, rangesStr, srcIndex, aspect) {
         var cortesBin = qcGetOrCreateBin('cortes');
         var newSeq = project.createNewSequenceFromClips(seqName, [master], cortesBin);
         if (!newSeq) return "ERROR: Não consegui criar a sequência '" + seqName + "'.";
-        project.activeSequence = newSeq;
+        // NÃO ativar a sequência na timeline: com muitos cortes de um episódio
+        // longo, abrir uma aba por corte (waveform/thumbnails do nest de horas)
+        // deixava a montagem lentíssima (~13 min/corte medidos).
         qcApplyAspect(newSeq, aspect);
 
         // Esvazia a timeline auto-criada e insere só os trechos, na ordem
