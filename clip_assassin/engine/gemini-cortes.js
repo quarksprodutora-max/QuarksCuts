@@ -419,4 +419,66 @@ function contaPalavras(s) {
   return m ? m.length : 0;
 }
 
-module.exports = { gerarCortes, corrigirLegendas };
+// corrigirPalavras(words) -> Promise<string[]> (mesmo tamanho/ordem).
+// O Whisper em PT muitas vezes transcreve SEM pontuação — e o agrupamento de
+// legendas quebra NA pontuação. Esta etapa roda ANTES do agrupamento: o Gemini
+// recebe as palavras numeradas e devolve cada uma corrigida (acentos/grafia)
+// e com a pontuação ANEXADA à palavra onde ela ocorre na fala. Validação
+// rígida por item: 1 palavra entra → 1 palavra sai (senão mantém a original).
+const PALAVRAS_POR_LOTE = 400;
+
+function validaPalavraCorrigida(original, corrigida) {
+  if (typeof corrigida !== 'string') return false;
+  const c = corrigida.trim();
+  if (!c || /\s/.test(c)) return false;          // juntou palavras? rejeita
+  return contaPalavras(c) === 1 && contaPalavras(original) === 1;
+}
+
+async function corrigirPalavras(words) {
+  const cfg = loadConfig();
+  const apiKey = cfg.gemini_api_key;
+  if (!apiKey || apiKey.indexOf('COLE_SUA_CHAVE') === 0) {
+    throw new Error('Defina gemini_api_key em engine/config.json.');
+  }
+  const textos = words.map(function (w) { return w.text; });
+  const out = textos.slice();
+  let corrigidas = 0, rejeitadas = 0;
+
+  for (let base = 0; base < textos.length; base += PALAVRAS_POR_LOTE) {
+    const lote = textos.slice(base, base + PALAVRAS_POR_LOTE);
+    const numbered = lote.map((t, i) => i + '\t' + t).join('\n');
+    const prompt =
+      'Abaixo estão palavras CONSECUTIVAS transcritas automaticamente de uma fala em português do Brasil. ' +
+      'A transcrição pode estar sem pontuação e com acentos/grafia errados.\n' +
+      'Devolva AS MESMAS palavras, na MESMA ordem e quantidade, fazendo apenas:\n' +
+      '- corrigir acentuação e grafia da palavra;\n' +
+      '- ANEXAR a pontuação (vírgula, ponto, ?, !, :) ao FINAL da palavra onde a pontuação ocorre na fala (leia o contexto completo para decidir);\n' +
+      '- iniciar com maiúscula a palavra que começa uma frase.\n' +
+      'REGRAS: NÃO junte, divida, remova, adicione ou troque palavras. Cada item de saída corresponde ao item de entrada de mesmo índice e contém UMA única palavra.\n\n' +
+      'Entrada (uma por linha, "indice<TAB>palavra"):\n' + numbered + '\n\n' +
+      'Responda APENAS em JSON: {"palavras":[{"i":0,"t":"..."}, ...]}';
+
+    const body = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+    };
+    let parsed;
+    try {
+      parsed = JSON.parse(extractText(await callGemini(modelList(cfg), apiKey, body)));
+    } catch (e) {
+      qcLog('legenda', 'pontuação: lote ' + (base / PALAVRAS_POR_LOTE + 1) + ' falhou (' + e.message + ') — mantendo palavras originais');
+      continue;
+    }
+    const arr = (parsed && parsed.palavras) || [];
+    for (let k = 0; k < arr.length; k++) {
+      const i = parseInt(arr[k].i, 10);
+      if (isNaN(i) || i < 0 || i >= lote.length) continue;
+      if (validaPalavraCorrigida(lote[i], arr[k].t)) { out[base + i] = arr[k].t.trim(); corrigidas++; }
+      else rejeitadas++;
+    }
+  }
+  qcLog('legenda', 'pontuação por palavra: ' + corrigidas + ' corrigidas, ' + rejeitadas + ' rejeitadas de ' + textos.length);
+  return out;
+}
+
+module.exports = { gerarCortes, corrigirLegendas, corrigirPalavras };

@@ -368,6 +368,7 @@
                     resolveModelPath: tr.resolveModelPath,
                     gerarCortes: gem.gerarCortes,
                     corrigirLegendas: gem.corrigirLegendas,
+                    corrigirPalavras: gem.corrigirPalavras,
                     srtMod: require(extRoot + '/engine/srt.js')
                 };
             } catch (e) {
@@ -563,16 +564,31 @@
             return qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
                 var words = res.segments || [];
                 if (!words.length) throw new Error('Sem fala detectada nesta sequência.');
-                var grupos = eng.srtMod.agruparPorPontuacao(words, 20);
-                if (!grupos.length) throw new Error('Legenda vazia.');
-                showStatus(idioma ? '🌐 Traduzindo a legenda…' : '📝 Corrigindo a legenda (gramática/acentuação)…', 'info');
-                return eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined }).then(function(corr) {
-                    var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
-                    return new Promise(function(resolve) {
-                        // Alinha ao frame da sequência (senão o Premiere arredonda depois).
-                        csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
-                            var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
-                            resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+                // 1) Pontua/corrige EM NÍVEL DE PALAVRA, ANTES de agrupar — o Whisper
+                //    em PT muitas vezes vem sem pontuação, e a quebra de legenda é NA
+                //    pontuação. Corrigir depois de agrupar quebrava as linhas errado.
+                showStatus('📝 Pontuando e corrigindo a transcrição…', 'info');
+                return eng.corrigirPalavras(words).then(function(fixed) {
+                    var wordsFixed = words.map(function(w, i) { return { start: w.start, end: w.end, text: (fixed[i] || w.text) }; });
+                    // 2) Agrupa quebrando na pontuação (agora presente).
+                    var grupos = eng.srtMod.agruparPorPontuacao(wordsFixed, 20);
+                    if (!grupos.length) throw new Error('Legenda vazia.');
+                    // 3) Tradução (se pedida) — linha a linha, preservando o timing.
+                    var pTexto;
+                    if (idioma) {
+                        showStatus('🌐 Traduzindo a legenda…', 'info');
+                        pTexto = eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma });
+                    } else {
+                        pTexto = Promise.resolve(grupos.map(function(c) { return c.text; })); // já corrigida
+                    }
+                    return pTexto.then(function(txts) {
+                        var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (txts[i] || c.text) }; });
+                        return new Promise(function(resolve) {
+                            // Alinha ao frame da sequência (senão o Premiere arredonda depois).
+                            csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+                                var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
+                                resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+                            });
                         });
                     });
                 });

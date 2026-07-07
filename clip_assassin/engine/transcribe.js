@@ -143,6 +143,25 @@ function filterHallucinations(words) {
   return clean.filter(function (w, i) { return !drop[i]; });
 }
 
+// Preset do -dtw a partir do nome do arquivo do modelo (ggml-small.bin →
+// "small", ggml-large-v3.bin → "large.v3"). null = modelo não reconhecido
+// (não passa -dtw; melhor sem do que com preset errado).
+function dtwPreset(modelPath) {
+  const n = path.basename(String(modelPath)).toLowerCase();
+  if (n.indexOf('large-v3') !== -1 || n.indexOf('large.v3') !== -1) return 'large.v3';
+  if (n.indexOf('large-v2') !== -1 || n.indexOf('large.v2') !== -1) return 'large.v2';
+  if (n.indexOf('large-v1') !== -1) return 'large.v1';
+  if (n.indexOf('medium.en') !== -1) return 'medium.en';
+  if (n.indexOf('medium') !== -1) return 'medium';
+  if (n.indexOf('small.en') !== -1) return 'small.en';
+  if (n.indexOf('small') !== -1) return 'small';
+  if (n.indexOf('base.en') !== -1) return 'base.en';
+  if (n.indexOf('base') !== -1) return 'base';
+  if (n.indexOf('tiny.en') !== -1) return 'tiny.en';
+  if (n.indexOf('tiny') !== -1) return 'tiny';
+  return null;
+}
+
 // Resolve o caminho do modelo que SERIA usado para uma dada opção (ou o padrão
 // do config). Síncrono — usado pelo painel para nomear o cache SEM precisar
 // rodar a transcrição (ex.: decidir se já existe transcript-<modelo>.json).
@@ -181,9 +200,15 @@ async function transcribe(mediaPath, opts) {
 
     if (opts.onProgress) opts.onProgress('Transcrevendo (Whisper offline)… 0%');
     let lastPct = 0;
+    // -dtw: timestamps token-a-token por alinhamento (DTW) — reduz o "jitter"
+    // dos tempos por palavra (legenda ora adiantada, ora atrasada). O preset
+    // precisa casar com o modelo; se não reconhecermos, seguimos sem -dtw.
+    const dtw = dtwPreset(model);
+    const args = ['-m', model, '-f', wavPath, '-l', lang, '-ml', '1', '-sow', '-pp', '-oj', '-of', outBase];
+    if (dtw) args.push('-dtw', dtw);
     await run(
       whisper,
-      ['-m', model, '-f', wavPath, '-l', lang, '-ml', '1', '-sow', '-pp', '-oj', '-of', outBase],
+      args,
       function (s) {
         // -pp faz o whisper.cpp imprimir "progress = NN%" no stderr.
         const m = /progress\s*=\s*(\d+)%/.exec(s);
