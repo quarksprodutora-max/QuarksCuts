@@ -372,13 +372,18 @@ async function corrigirLegendas(textos, opts) {
     ? 'TRADUZA as legendas abaixo para ' + alvo + ', linha a linha. As linhas são trechos ' +
       'CONSECUTIVOS da mesma fala (leia todas para entender o contexto antes de traduzir). ' +
       'Distribua a tradução de forma natural entre as linhas, respeitando a ordem temporal da fala.\n'
-    : 'Corrija ortografia, acentuação e pontuação leve das legendas abaixo, em pt-BR.\n';
+    : 'Corrija ortografia, acentuação e pontuação das legendas abaixo, em pt-BR.\n';
   const prompt =
     tarefa +
     'REGRAS IMPORTANTES:\n' +
     '- NÃO junte nem divida linhas: a saída tem EXATAMENTE a mesma quantidade de itens, na mesma ordem.\n' +
-    '- Mantenha cada linha curta (máx ~25 caracteres). Não adicione comentários.\n' +
-    (alvo ? '- Traduza o sentido com naturalidade; não deixe nada no idioma original.\n' : '- Corrija só o texto; não traduza, não reescreva o sentido.\n') +
+    (alvo
+      ? '- Traduza o sentido com naturalidade; não deixe nada no idioma original.\n'
+      : '- É PROIBIDO mover palavras entre linhas: cada linha tem um TEMPO de exibição fixo, ' +
+        'sincronizado com a fala. A linha corrigida deve ter EXATAMENTE as mesmas palavras da ' +
+        'original (mesma quantidade, mesma ordem) — só conserte grafia, acentos e pontuação. ' +
+        'NÃO redistribua texto para equalizar o tamanho das linhas. NÃO reescreva o sentido.\n') +
+    '- Não adicione comentários.\n' +
     '\nEntrada (uma por linha, "indice<TAB>texto"):\n' + numbered + '\n\n' +
     'Responda APENAS em JSON: {"linhas":[{"i":0,"texto":"..."}, ...]}';
 
@@ -392,13 +397,26 @@ async function corrigirLegendas(textos, opts) {
   try { parsed = JSON.parse(extractText(raw)); } catch (e) { return textos.slice(); }
   const out = textos.slice();
   const arr = (parsed && parsed.linhas) || [];
+  let rejeitadas = 0;
   for (let k = 0; k < arr.length; k++) {
     const i = parseInt(arr[k].i, 10);
     if (!isNaN(i) && i >= 0 && i < out.length && typeof arr[k].texto === 'string' && arr[k].texto.trim()) {
-      out[i] = arr[k].texto.trim();
+      const novo = arr[k].texto.trim();
+      // Modo correção: valida que o modelo NÃO redistribuiu palavras entre
+      // linhas (cada linha tem tempo fixo; re-flow dessincroniza texto × fala).
+      // Se a contagem de palavras mudou, a linha corrigida é DESCARTADA.
+      if (!alvo && contaPalavras(novo) !== contaPalavras(textos[i])) { rejeitadas++; continue; }
+      out[i] = novo;
     }
   }
+  if (rejeitadas > 0) qcLog('legenda', rejeitadas + ' linha(s) rejeitada(s) na validação anti-reflow (mantido o texto original)');
   return out;
+}
+
+// Conta palavras ignorando pontuação solta (p/ validar a correção linha a linha).
+function contaPalavras(s) {
+  const m = String(s).match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu);
+  return m ? m.length : 0;
 }
 
 module.exports = { gerarCortes, corrigirLegendas };

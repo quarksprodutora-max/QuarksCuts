@@ -54,6 +54,8 @@ function agruparPorPontuacao(words, maxChars) {
 // são arredondados na importação (até ±meio frame, às vezes pro lado errado).
 // Pré-alinhando aqui, a importação vira exata. Garante também duração mínima de
 // 1 frame e nenhuma sobreposição entre legendas vizinhas.
+const GAP_MAX = 0.4; // buracos menores que isso entre legendas são fechados
+
 function snapToFrames(caps, fps) {
   if (!fps || fps <= 0 || !caps || !caps.length) return caps;
   const dur = 1 / fps;
@@ -66,6 +68,12 @@ function snapToFrames(caps, fps) {
     if (e < s + dur) e = s + dur;          // pelo menos 1 frame de duração
     out.push({ start: s, end: e, text: caps[i].text });
     prevEnd = e;
+  }
+  // Fecha micro-gaps ("respiros"): a legenda anterior estica até a próxima
+  // quando o buraco é pequeno — padrão de legendagem, leitura mais confortável.
+  for (let i = 0; i < out.length - 1; i++) {
+    const gap = out[i + 1].start - out[i].end;
+    if (gap > 0 && gap <= GAP_MAX) out[i].end = out[i + 1].start;
   }
   return out;
 }
