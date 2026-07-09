@@ -549,6 +549,11 @@
                         L.push('LEGENDA PARA REDES SOCIAIS:');
                         L.push(c.legenda_ig ? c.legenda_ig : '(não gerada)');
                         L.push('');
+                        if (c.dicas_edicao) {
+                            L.push('DICAS DE EDIÇÃO (textos na tela, destaques, b-roll, CTA):');
+                            L.push(c.dicas_edicao);
+                            L.push('');
+                        }
                     }
                     var file = eng.pathMod.join(base, 'relatorio-cortes.txt');
                     try { eng.fs.writeFileSync(file, L.join('\r\n'), 'utf8'); qcPanelLog('relatório gravado: ' + file); } catch (e) {}

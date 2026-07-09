@@ -233,6 +233,7 @@ function normalizeClips(parsed) {
         titulo: c.titulo || ('Corte ' + (i + 1)),
         avaliacao: c.avaliacao || null,
         legenda_ig: c.legenda_ig || '',
+        dicas_edicao: c.dicas_edicao || '',
         segmentos: norm,
       });
     }
@@ -252,7 +253,7 @@ function extractText(raw) {
 function buildPrompt(transcript, alvo, minD, maxD) {
   return (
     'Você é um Especialista em Estratégia de Conteúdo Viral e Editor Sênior de cortes (clips) brasileiro, com experiência comprovada em TikTok, Reels e Shorts. Seu objetivo: cortes que capturam a atenção nos primeiros segundos, geram curiosidade, incentivam compartilhamento e levam tráfego ao episódio completo.\n' +
-    'Abaixo está a TRANSCRIÇÃO do episódio, uma linha por trecho no formato "[inicio-fim] texto", onde inicio e fim são SEGUNDOS do vídeo original.\n\n' +
+    'Abaixo está a TRANSCRIÇÃO do episódio, uma linha por trecho no formato "[inicio-fim] texto", onde inicio e fim são SEGUNDOS do vídeo original. Exemplo: "[0.0-5.5] Olá a todos e bem-vindos ao nosso podcast!"\n\n' +
     'Tarefa: crie ' + alvo + ' cortes virais e autossuficientes, cada um com ' + minD + ' a ' + maxD + ' segundos de duração total.\n\n' +
     'REGRA DE OURO — GANCHO PRIMEIRO (OBRIGATÓRIA EM TODO CORTE):\n' +
     'O primeiro segmento de CADA corte deve ser um GANCHO de 3 a 8 segundos retirado do momento mais impactante do assunto — MESMO que no episódio ele apareça depois. Reordene: gancho primeiro, desenvolvimento depois. Um corte com um único segmento contínuo, sem gancho reposicionado, SÓ é aceitável se o trecho já começar naturalmente com uma frase de impacto.\n' +
@@ -268,9 +269,10 @@ function buildPrompt(transcript, alvo, minD, maxD) {
     '- Use os timestamps REAIS da transcrição; não invente tempos. Cada segmento deve começar/terminar em fronteiras naturais de fala.\n' +
     '- titulo: chamada curta e atrativa em pt-BR (sem hashtags).\n' +
     '- avaliacao: "hook" (nota + justificativa curta, ex.: "9/10 - abre com pergunta que prende") e "potencial_viral" ("Muito Alta", "Alta", "Média" ou "Baixa").\n' +
-    '- legenda_ig: legenda pronta para postar o corte no Instagram Reels, em pt-BR: 1-3 frases envolventes + CTA para ouvir o episódio completo + 4 a 6 hashtags relevantes.\n\n' +
+    '- legenda_ig: legenda pronta para postar o corte no Instagram Reels, em pt-BR: 1-3 frases envolventes + CTA para ouvir o episódio completo + 4 a 6 hashtags relevantes (combinando amplas e de nicho).\n' +
+    '- dicas_edicao: 1-3 sugestões CURTAS e práticas para o editor deixar o Reels mais dinâmico neste corte específico: texto de impacto para pôr na tela (e em qual momento), palavras-chave para destacar na legenda dinâmica, ideia de b-roll/imagem de apoio se couber, e o CTA visual do final (ex.: "Ouça o episódio completo — link na bio").\n\n' +
     'Responda APENAS em JSON válido, sem markdown, no formato exato:\n' +
-    '{"clips":[{"titulo":"...","avaliacao":{"hook":"...","potencial_viral":"..."},"legenda_ig":"...","segmentos":[{"inicio":12.3,"fim":58.7}]}]}\n\n' +
+    '{"clips":[{"titulo":"...","avaliacao":{"hook":"...","potencial_viral":"..."},"legenda_ig":"...","dicas_edicao":"...","segmentos":[{"inicio":12.3,"fim":58.7}]}]}\n\n' +
     'TRANSCRIÇÃO:\n"""\n' + transcript + '\n"""'
   );
 }
