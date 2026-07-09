@@ -58,14 +58,18 @@ function resolveModelo(override, cfgModel) {
 // ficar "Transcrevendo…" para sempre.
 const STALL_MS = 10 * 60 * 1000;
 
-function run(cmd, args, onStderr) {
+function run(cmd, args, onStderr, collect) {
   return new Promise((resolve, reject) => {
     let err = '';
+    let out = '';
     let lastActivity = Date.now();
     let settled = false;
     const t0 = Date.now();
     qcLog('run', path.basename(cmd) + ' ' + args.join(' '));
-    const p = spawn(cmd, args, { windowsHide: true });
+    const p = spawn(cmd, args, {
+      windowsHide: true,
+      env: Object.assign({}, process.env, { PYTHONIOENCODING: 'utf-8' }),
+    });
 
     const watchdog = setInterval(() => {
       if (Date.now() - lastActivity > STALL_MS) {
@@ -80,7 +84,10 @@ function run(cmd, args, onStderr) {
       }
     }, 60 * 1000);
 
-    p.stdout.on('data', () => { lastActivity = Date.now(); });
+    p.stdout.on('data', (d) => {
+      lastActivity = Date.now();
+      if (collect) out += d.toString();
+    });
     p.stderr.on('data', (d) => {
       lastActivity = Date.now();
       const s = d.toString();
@@ -98,7 +105,7 @@ function run(cmd, args, onStderr) {
       const secs = Math.round((Date.now() - t0) / 1000);
       if (code === 0) {
         qcLog('run', path.basename(cmd) + ' OK em ' + secs + 's');
-        resolve();
+        resolve(out);
       } else {
         qcLog('run', path.basename(cmd) + ' FALHOU código ' + code + ' em ' + secs + 's. stderr: ' + err.slice(-400));
         reject(new Error(path.basename(cmd) + ' saiu com código ' + code + '. ' + err.slice(-400)));
@@ -196,6 +203,13 @@ async function transcribe(mediaPath, opts) {
   opts = opts || {};
   const cfg = loadConfig();
 
+  // Motor "fw:<tamanho>" — faster-whisper (fw-words.exe): alinhamento de
+  // palavra por cross-attention, mais preciso que o whisper.cpp em fala
+  // contínua/rápida. Decodifica a mídia sozinho (sem passo de ffmpeg).
+  if (opts.model && opts.model.indexOf('fw:') === 0) {
+    return transcribeFw(mediaPath, opts.model.substring(3), cfg, opts);
+  }
+
   const ffmpeg = resolveBin(cfg.ffmpeg_path, 'ffmpeg.exe');
   const whisper = resolveBin(cfg.whisper_cli_path, 'whisper-cli.exe');
   const model = resolveModelo(opts.model, cfg.whisper_model);
@@ -260,6 +274,43 @@ async function transcribe(mediaPath, opts) {
     try { fs.existsSync(wavPath) && fs.unlinkSync(wavPath); } catch (e) {}
     try { fs.existsSync(jsonPath) && fs.unlinkSync(jsonPath); } catch (e) {}
   }
+}
+
+// Transcrição via fw-words.exe (faster-whisper standalone).
+// Procura o exe em: cfg.fw_words_path (absoluto) → bin/fw-words/fw-words.exe.
+async function transcribeFw(mediaPath, size, cfg, opts) {
+  let exe = cfg.fw_words_path || '';
+  if (exe && !fs.existsSync(exe)) exe = '';
+  if (!exe) {
+    const p = path.join(BIN_DIR, 'fw-words', 'fw-words.exe');
+    if (fs.existsSync(p)) exe = p;
+  }
+  if (!exe) {
+    throw new Error('fw-words.exe (motor faster-whisper) não está instalado nesta máquina. ' +
+      'Use outra Qualidade no dropdown, ou instale o pacote completo.');
+  }
+
+  qcLog('transcribe', 'INÍCIO (faster-whisper ' + size + ') — mídia: ' + mediaPath);
+  if (opts.onProgress) opts.onProgress('Transcrevendo (faster-whisper)… 0%');
+  let lastPct = 0;
+  const out = await run(exe, [mediaPath, size], function (s) {
+    const m = /progress\s*=\s*(\d+)%/.exec(s);
+    if (m) lastPct = parseInt(m[1], 10);
+    if (opts.onProgress) opts.onProgress('Transcrevendo (faster-whisper)… ' + lastPct + '%');
+  }, true);
+
+  const line = String(out).trim().split('\n').filter(Boolean).pop() || '';
+  let data;
+  try { data = JSON.parse(line); } catch (e) { throw new Error('fw-words não retornou JSON válido.'); }
+  if (data.error) throw new Error('faster-whisper: ' + data.error);
+
+  const segs = (data.words || []).map(function (w) {
+    return { start: w.s, end: w.e, text: String(w.t).trim() };
+  }).filter(function (w) { return w.text; });
+  const filtered = filterHallucinations(segs);
+  qcLog('transcribe', 'FIM (faster-whisper) — ' + filtered.length + ' palavras');
+  if (filtered.length === 0) throw new Error('Transcrição vazia — o vídeo tem fala audível?');
+  return { segments: filtered, language: data.language || 'auto' };
 }
 
 module.exports = { transcribe, resolveModelPath };

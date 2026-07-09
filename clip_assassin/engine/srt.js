@@ -54,6 +54,33 @@ function agruparPorPontuacao(words, maxChars) {
 // são arredondados na importação (até ±meio frame, às vezes pro lado errado).
 // Pré-alinhando aqui, a importação vira exata. Garante também duração mínima de
 // 1 frame e nenhuma sobreposição entre legendas vizinhas.
+// Funde legendas CURTÍSSIMAS com a vizinha: em fala rápida, quebras por
+// pontuação geram legendas de 0,3-0,5s ("não,", "olha,") que piscam rápido
+// demais para ler. Funde com a próxima (ou anterior, se for a última) quando
+// o texto combinado continua curto o bastante para caber bem na tela.
+const MIN_CAP_DUR = 0.7;   // segundos
+const MERGE_MAX_CHARS = 38;
+
+function mergeShortCaptions(caps) {
+  if (!caps || caps.length < 2) return caps;
+  const out = caps.map(function (c) { return { start: c.start, end: c.end, text: c.text }; });
+  for (let i = 0; i < out.length; i++) {
+    if (out[i].end - out[i].start >= MIN_CAP_DUR) continue;
+    const next = out[i + 1], prev = out[i - 1];
+    if (next && (out[i].text + ' ' + next.text).length <= MERGE_MAX_CHARS) {
+      next.text = out[i].text + ' ' + next.text;
+      next.start = out[i].start;
+      out.splice(i, 1); i--;
+    } else if (prev && (prev.text + ' ' + out[i].text).length <= MERGE_MAX_CHARS) {
+      prev.text = prev.text + ' ' + out[i].text;
+      prev.end = out[i].end;
+      out.splice(i, 1); i--;
+    }
+    // sem vizinho que caiba: fica curta mesmo (melhor que texto gigante)
+  }
+  return out;
+}
+
 const GAP_MAX = 0.4; // buracos menores que isso entre legendas são fechados
 
 function snapToFrames(caps, fps) {
@@ -84,26 +111,138 @@ function snapToFrames(caps, fps) {
 function buildCutSrt(segmentos, captionSegs) {
   const lines = [];
   let idx = 1;
-  let cutOffset = 0; // duração acumulada dos trechos anteriores do corte
 
-  for (let g = 0; g < segmentos.length; g++) {
-    const s = parseFloat(segmentos[g].inicio);
-    const e = parseFloat(segmentos[g].fim);
+  // 1. Criar um mapeamento da timeline original para a timeline do corte
+  const cutTimelineMap = []; // [{ originalStart, originalEnd, cutStart, cutEnd }]
+  let currentCutOffset = 0;
+  for (const seg of segmentos) {
+    const s = parseFloat(seg.inicio);
+    const e = parseFloat(seg.fim);
     if (isNaN(s) || isNaN(e) || e <= s) continue;
+    cutTimelineMap.push({ originalStart: s, originalEnd: e, cutStart: currentCutOffset, cutEnd: currentCutOffset + (e - s) });
+    currentCutOffset += (e - s);
+  }
 
-    for (let c = 0; c < captionSegs.length; c++) {
-      const cap = captionSegs[c];
-      const cs = Math.max(cap.start, s);
-      const ce = Math.min(cap.end, e);
-      if (ce <= cs) continue; // não cai neste trecho
-      const localStart = cutOffset + (cs - s);
-      const localEnd = cutOffset + (ce - s);
-      const txt = (cap.text || '').trim();
-      if (!txt) continue;
-      lines.push(idx + '\n' + formatSrtTime(localStart) + ' --> ' + formatSrtTime(localEnd) + '\n' + txt + '\n');
+  // 2. Processar cada legenda original
+  for (const cap of captionSegs) {
+    const originalCapStart = cap.start;
+    const originalCapEnd = cap.end;
+    const txt = (cap.text || '').trim();
+    if (!txt) continue;
+
+    const rebasedCaptionParts = [];
+
+    // Encontrar todas as partes da legenda original que caem nos segmentos do corte
+    for (const mapEntry of cutTimelineMap) {
+      const intersectionStartOriginal = Math.max(originalCapStart, mapEntry.originalStart);
+      const intersectionEndOriginal = Math.min(originalCapEnd, mapEntry.originalEnd);
+
+      if (intersectionEndOriginal > intersectionStartOriginal) {
+        // Há uma interseção. Calcular o tempo re-baseado para esta parte da legenda.
+        const localStart = mapEntry.cutStart + (intersectionStartOriginal - mapEntry.originalStart);
+        const localEnd = mapEntry.cutStart + (intersectionEndOriginal - mapEntry.originalStart);
+        rebasedCaptionParts.push({ start: localStart, end: localEnd, text: txt });
+      }
+    }
+
+    // 3. Consolidar as partes re-baseadas em entradas SRT, respeitando gaps
+    if (rebasedCaptionParts.length > 0) {
+      // Ordenar as partes para garantir processamento correto
+      rebasedCaptionParts.sort((a, b) => a.start - b.start);
+
+      let currentSrtEntryStart = rebasedCaptionParts[0].start;
+      let currentSrtEntryEnd = rebasedCaptionParts[0].end;
+
+      for (let i = 1; i < rebasedCaptionParts.length; i++) {
+        const part = rebasedCaptionParts[i];
+        // Se a parte atual é contígua ou muito próxima da anterior, estender a entrada SRT
+        // Definimos um pequeno limiar para considerar contíguo e evitar fragmentação excessiva
+        const CONTIGUITY_THRESHOLD = 0.05; // 50ms
+        if (part.start - currentSrtEntryEnd <= CONTIGUITY_THRESHOLD) {
+          currentSrtEntryEnd = part.end; // Estender o fim
+        } else {
+          // Se há um gap significativo, finalizar a entrada atual e começar uma nova
+          lines.push(idx + '\n' + formatSrtTime(currentSrtEntryStart) + ' --> ' + formatSrtTime(currentSrtEntryEnd) + '\n' + txt + '\n');
+          idx++;
+          currentSrtEntryStart = part.start;
+          currentSrtEntryEnd = part.end;
+        }
+      }
+      // Adicionar a última entrada SRT
+      lines.push(idx + '\n' + formatSrtTime(currentSrtEntryStart) + ' --> ' + formatSrtTime(currentSrtEntryEnd) + '\n' + txt + '\n');
       idx++;
     }
-    cutOffset += (e - s);
+  }
+  return lines.join('\n');
+}
+
+function buildCutSrt(segmentos, captionSegs) {
+  const lines = [];
+  let idx = 1;
+
+  // Pré-calcular o mapeamento de tempo do original para o corte
+  // Isso cria uma função que, dado um tempo na timeline original, retorna o tempo correspondente na timeline do corte
+  const originalToCutTimeMap = (function() {
+    const map = []; // [{originalStart, originalEnd, cutStart, cutEnd}]
+    let currentCutTime = 0;
+    for (const seg of segmentos) {
+      const s = parseFloat(seg.inicio);
+      const e = parseFloat(seg.fim);
+      if (isNaN(s) || isNaN(e) || e <= s) continue;
+      map.push({ originalStart: s, originalEnd: e, cutStart: currentCutTime, cutEnd: currentCutTime + (e - s) });
+      currentCutTime += (e - s);
+    }
+
+    return function(originalTime) {
+      for (const entry of map) {
+        if (originalTime >= entry.originalStart && originalTime < entry.originalEnd) {
+          return entry.cutStart + (originalTime - entry.originalStart);
+        }
+      }
+      return null; // Tempo original não está em nenhum segmento do corte
+    };
+  })();
+
+  // Iterar sobre cada legenda original
+  for (const cap of captionSegs) {
+    const originalCapStart = cap.start;
+    const originalCapEnd = cap.end;
+    const txt = (cap.text || '').trim();
+    if (!txt) continue;
+
+    let rebasedStart = null;
+    let rebasedEnd = null;
+
+    // Encontrar o início e fim da legenda na timeline do corte
+    // Percorrer os segmentos do corte para ver onde a legenda original se encaixa
+    let currentCutOffset = 0;
+    for (const seg of segmentos) {
+      const s = parseFloat(seg.inicio);
+      const e = parseFloat(seg.fim);
+      if (isNaN(s) || isNaN(e) || e <= s) continue;
+
+      // Calcular a interseção da legenda com o segmento atual
+      const intersectionStartOriginal = Math.max(originalCapStart, s);
+      const intersectionEndOriginal = Math.min(originalCapEnd, e);
+
+      if (intersectionEndOriginal > intersectionStartOriginal) {
+        // Há uma interseção. Calcular o tempo re-baseado para esta parte da legenda.
+        const localIntersectionStart = currentCutOffset + (intersectionStartOriginal - s);
+        const localIntersectionEnd = currentCutOffset + (intersectionEndOriginal - s);
+
+        if (rebasedStart === null) {
+          rebasedStart = localIntersectionStart;
+        }
+        rebasedEnd = localIntersectionEnd; // Sempre estender o fim re-baseado
+      }
+      currentCutOffset += (e - s);
+    }
+
+    // Se a legenda foi encontrada em pelo menos um segmento do corte
+    if (rebasedStart !== null && rebasedEnd !== null && rebasedEnd > rebasedStart) {
+      lines.push(idx + '\n' + formatSrtTime(rebasedStart) + ' --> ' + formatSrtTime(rebasedEnd) + '\n' + txt + '\n');
+      idx++;
+    }
   }
   return lines.join('\n');
 }
@@ -165,4 +304,4 @@ function parseSrtContent(content) {
   return caps;
 }
 
-module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, snapToFrames, parseSrtContent };
+module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, snapToFrames, parseSrtContent, mergeShortCaptions };

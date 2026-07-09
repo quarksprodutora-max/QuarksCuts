@@ -106,6 +106,7 @@
                     <option value="ggml-small.bin">Rápida (small)</option>
                     <option value="ggml-medium.bin">Média (medium)</option>
                     <option value="ggml-large-v3.bin">Alta (large)</option>
+                    <option value="fw:large-v3">Máxima (faster-whisper) — melhor sincronia</option>
                 </select>
             </div>
             <div>
@@ -436,8 +437,14 @@
                     var cacheDir = eng.pathMod.join(qcCacheRoot(eng), keyRes.substring(3));
                     if (!eng.fs.existsSync(cacheDir)) eng.fs.mkdirSync(cacheDir, { recursive: true });
 
-                    var modelPath = eng.resolveModelPath(modelSel);
-                    var modelBase = modelPath ? eng.pathMod.basename(modelPath).replace(/\.bin$/i, '') : 'default';
+                    var modelBase;
+                    if (modelSel && modelSel.indexOf('fw:') === 0) {
+                        // motor faster-whisper: cache separado por tamanho (fw-large-v3 etc.)
+                        modelBase = 'fw-' + modelSel.substring(3);
+                    } else {
+                        var modelPath = eng.resolveModelPath(modelSel);
+                        modelBase = modelPath ? eng.pathMod.basename(modelPath).replace(/\.bin$/i, '') : 'default';
+                    }
                     var transcriptFile = eng.pathMod.join(cacheDir, 'transcript-' + modelBase + '.json');
                     var audioFile = eng.pathMod.join(cacheDir, 'audio.wav');
 
@@ -575,8 +582,10 @@
                 showStatus('📝 Pontuando e corrigindo a transcrição…', 'info');
                 return eng.corrigirPalavras(words).then(function(fixed) {
                     var wordsFixed = words.map(function(w, i) { return { start: w.start, end: w.end, text: (fixed[i] || w.text) }; });
-                    // 2) Agrupa quebrando na pontuação (agora presente).
+                    // 2) Agrupa quebrando na pontuação (agora presente) e funde
+                    //    legendas curtíssimas (fala rápida vira pisca-pisca).
                     var grupos = eng.srtMod.agruparPorPontuacao(wordsFixed, 20);
+                    grupos = eng.srtMod.mergeShortCaptions(grupos);
                     if (!grupos.length) throw new Error('Legenda vazia.');
                     // 3) Tradução (se pedida) — linha a linha, preservando o timing.
                     var pTexto;

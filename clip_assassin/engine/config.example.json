@@ -7,5 +7,6 @@
   "audio_export_preset": "C:\\Program Files\\Adobe\\...\\Waveform Audio 48kHz 16-bit.epr",
   "whisper_cli_path": "C:\\caminho\\para\\bin\\Release\\whisper-cli.exe",
   "whisper_model": "C:\\caminho\\para\\bin\\ggml-medium.bin",
-  "ffmpeg_path": "C:\\caminho\\para\\bin\\ffmpeg\\bin\\ffmpeg.exe"
+  "ffmpeg_path": "C:\\caminho\\para\\bin\\ffmpeg\\bin\\ffmpeg.exe",
+  "fw_words_path": ""
 }
