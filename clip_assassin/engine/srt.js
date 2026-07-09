@@ -59,7 +59,7 @@ function agruparPorPontuacao(words, maxChars) {
 // demais para ler. Funde com a próxima (ou anterior, se for a última) quando
 // o texto combinado continua curto o bastante para caber bem na tela.
 const MIN_CAP_DUR = 0.55;  // segundos (só funde o que realmente pisca)
-const MERGE_MAX_CHARS = 22; // resultado curto (~20 chars): legenda de Reels é 1 linha grande
+const MERGE_MAX_CHARS = 24; // folga p/ fusões tipo "meu pai e da minha mãe."
 
 function mergeShortCaptions(caps) {
   if (!caps || caps.length < 2) return caps;
@@ -68,10 +68,14 @@ function mergeShortCaptions(caps) {
     if (out[i].end - out[i].start >= MIN_CAP_DUR) continue;
     const next = out[i + 1], prev = out[i - 1];
     // Direção respeita a pontuação (senão desfaz a quebra por frase):
-    // termina com pontuação = fim de frase/cláusula → pertence à ANTERIOR;
-    // sem pontuação = começo de ideia → pertence à PRÓXIMA.
+    // - NUNCA fundir com uma anterior que fecha FRASE (. ! ? …) — colar depois
+    //   do ponto cria frase nova dentro da legenda ("nessa vida. Ah, tá,").
+    // - curta que termina com pontuação pertence à ANTERIOR (se permitido);
+    // - curta sem pontuação pertence à PRÓXIMA.
     const fecha = /[.,!?;:…]$/.test(out[i].text);
-    const podePrev = prev && (prev.text + ' ' + out[i].text).length <= MERGE_MAX_CHARS;
+    const prevFechaFrase = prev && /[.!?…]$/.test(prev.text.trim());
+    const podePrev = prev && !prevFechaFrase &&
+                     (prev.text + ' ' + out[i].text).length <= MERGE_MAX_CHARS;
     const podeNext = next && (out[i].text + ' ' + next.text).length <= MERGE_MAX_CHARS &&
                      !/[.,!?;:…]$/.test(out[i].text); // nunca arrasta pontuação p/ o meio
     if (fecha && podePrev) {
@@ -82,8 +86,8 @@ function mergeShortCaptions(caps) {
       next.text = out[i].text + ' ' + next.text;
       next.start = out[i].start;
       out.splice(i, 1); i--;
-    } else if (podePrev && !/[.,!?;:…]$/.test(prev.text)) {
-      // último recurso: junta com a anterior se ELA não fecha frase
+    } else if (podePrev) {
+      // último recurso: junta com a anterior (que não fecha frase)
       prev.text = prev.text + ' ' + out[i].text;
       prev.end = out[i].end;
       out.splice(i, 1); i--;
