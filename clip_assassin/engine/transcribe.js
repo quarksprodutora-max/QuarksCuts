@@ -35,6 +35,24 @@ function resolveBin(cfgPath, defaultName) {
   return null;
 }
 
+// Resolve o MODELO pedido no dropdown de qualidade. Procura, nesta ordem:
+// caminho absoluto → bin/ da extensão → a PASTA do modelo configurado no
+// config (quem guarda os modelos fora da extensão, como no INSTALL.bat da
+// máquina de desenvolvimento, tem todos os .bin lado a lado).
+function resolveModelo(override, cfgModel) {
+  if (override) {
+    if (path.isAbsolute(override)) return fs.existsSync(override) ? override : null;
+    var noBin = path.join(BIN_DIR, override);
+    if (fs.existsSync(noBin)) return noBin;
+    if (cfgModel && path.isAbsolute(cfgModel)) {
+      var aoLado = path.join(path.dirname(cfgModel), override);
+      if (fs.existsSync(aoLado)) return aoLado;
+    }
+    return null; // pedido explícito não encontrado: NÃO cair em outro modelo
+  }
+  return resolveBin(cfgModel, 'ggml-small.bin');
+}
+
 // Sem saída por este tempo = processo travado (ex.: Windows suspendeu no meio
 // e o processo nunca voltou) → mata e retorna erro claro, em vez de o painel
 // ficar "Transcrevendo…" para sempre.
@@ -167,7 +185,7 @@ function dtwPreset(modelPath) {
 // rodar a transcrição (ex.: decidir se já existe transcript-<modelo>.json).
 function resolveModelPath(modelOverride) {
   const cfg = loadConfig();
-  return resolveBin(modelOverride || cfg.whisper_model, 'ggml-small.bin');
+  return resolveModelo(modelOverride, cfg.whisper_model);
 }
 
 // transcribe(mediaPath, { onProgress, model }) -> Promise<{ segments, language }>
@@ -180,11 +198,20 @@ async function transcribe(mediaPath, opts) {
 
   const ffmpeg = resolveBin(cfg.ffmpeg_path, 'ffmpeg.exe');
   const whisper = resolveBin(cfg.whisper_cli_path, 'whisper-cli.exe');
-  const model = resolveBin(opts.model || cfg.whisper_model, 'ggml-small.bin');
+  const model = resolveModelo(opts.model, cfg.whisper_model);
 
   if (!ffmpeg) throw new Error('ffmpeg.exe não encontrado em bin/ (veja bin/README.md).');
   if (!whisper) throw new Error('whisper-cli.exe não encontrado em bin/ (veja bin/README.md).');
-  if (!model) throw new Error('Modelo Whisper (.bin) não encontrado em bin/ (veja bin/README.md).');
+  if (!model) {
+    if (opts.model) {
+      const onde = cfg.whisper_model && path.isAbsolute(cfg.whisper_model)
+        ? path.dirname(cfg.whisper_model) : BIN_DIR;
+      throw new Error('O modelo "' + opts.model + '" não está instalado. Baixe-o em ' +
+        'huggingface.co/ggerganov/whisper.cpp e coloque em: ' + onde +
+        ' — ou escolha outra Qualidade no dropdown.');
+    }
+    throw new Error('Modelo Whisper (.bin) não encontrado em bin/ (veja bin/README.md).');
+  }
 
   qcLog('transcribe', 'INÍCIO — mídia: ' + mediaPath + ' | modelo: ' + path.basename(model));
 
@@ -206,6 +233,12 @@ async function transcribe(mediaPath, opts) {
     const dtw = dtwPreset(model);
     const args = ['-m', model, '-f', wavPath, '-l', lang, '-ml', '1', '-sow', '-pp', '-oj', '-of', outBase];
     if (dtw) args.push('-dtw', dtw);
+    // VAD (Silero): ancora os tempos ao início/fim REAIS de fala — melhora muito
+    // a sincronia em fala rápida e evita legenda "espalhada" sobre pausas.
+    // Procura o modelo ao lado do modelo Whisper e em bin/; sem ele, segue sem VAD.
+    const vad = resolveModelo('ggml-silero-v5.1.2.bin', cfg.whisper_model);
+    if (vad) args.push('--vad', '-vm', vad, '-vp', '60');
+    qcLog('transcribe', 'dtw=' + (dtw || 'off') + ' vad=' + (vad ? 'on' : 'off'));
     await run(
       whisper,
       args,
