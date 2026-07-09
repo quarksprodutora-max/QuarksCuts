@@ -601,7 +601,8 @@
                             // Alinha ao frame da sequência (senão o Premiere arredonda depois).
                             csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
                                 var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
-                                resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+                                var lead = (typeof eng.cfg.caption_lead_ms === 'number' ? eng.cfg.caption_lead_ms : 150) / 1000;
+                                resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps, lead) : caps);
                             });
                         });
                     });
@@ -710,7 +711,8 @@
 
             csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
                 var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
-                if (fps > 0) caps = eng.srtMod.snapToFrames(caps, fps);
+                // srt ajustado na mão: sem lead (os tempos já são a intenção do editor)
+                if (fps > 0) caps = eng.srtMod.snapToFrames(caps, fps, 0);
                 showStatus('🎨 Inserindo ' + caps.length + ' legenda(s) estilizada(s) na timeline…', 'info');
                 var payload = {
                     mogrt: mogrt,

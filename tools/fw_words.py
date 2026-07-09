@@ -42,6 +42,9 @@ def main():
         language=None,               # autodetecta
         word_timestamps=True,        # alinhamento por palavra (cross-attention)
         vad_filter=True,             # âncora em fala real
+        # padding generoso: sem isso o VAD engole a 1ª palavra quando a fala
+        # começa no instante zero (corte já começa falando)
+        vad_parameters={"speech_pad_ms": 400},
         temperature=0,
         condition_on_previous_text=False,
         no_speech_threshold=0.5,

@@ -67,11 +67,23 @@ function mergeShortCaptions(caps) {
   for (let i = 0; i < out.length; i++) {
     if (out[i].end - out[i].start >= MIN_CAP_DUR) continue;
     const next = out[i + 1], prev = out[i - 1];
-    if (next && (out[i].text + ' ' + next.text).length <= MERGE_MAX_CHARS) {
+    // Direção respeita a pontuação (senão desfaz a quebra por frase):
+    // termina com pontuação = fim de frase/cláusula → pertence à ANTERIOR;
+    // sem pontuação = começo de ideia → pertence à PRÓXIMA.
+    const fecha = /[.,!?;:…]$/.test(out[i].text);
+    const podePrev = prev && (prev.text + ' ' + out[i].text).length <= MERGE_MAX_CHARS;
+    const podeNext = next && (out[i].text + ' ' + next.text).length <= MERGE_MAX_CHARS &&
+                     !/[.,!?;:…]$/.test(out[i].text); // nunca arrasta pontuação p/ o meio
+    if (fecha && podePrev) {
+      prev.text = prev.text + ' ' + out[i].text;
+      prev.end = out[i].end;
+      out.splice(i, 1); i--;
+    } else if (podeNext) {
       next.text = out[i].text + ' ' + next.text;
       next.start = out[i].start;
       out.splice(i, 1); i--;
-    } else if (prev && (prev.text + ' ' + out[i].text).length <= MERGE_MAX_CHARS) {
+    } else if (podePrev && !/[.,!?;:…]$/.test(prev.text)) {
+      // último recurso: junta com a anterior se ELA não fecha frase
       prev.text = prev.text + ' ' + out[i].text;
       prev.end = out[i].end;
       out.splice(i, 1); i--;
@@ -83,13 +95,17 @@ function mergeShortCaptions(caps) {
 
 const GAP_MAX = 0.4; // buracos menores que isso entre legendas são fechados
 
-function snapToFrames(caps, fps) {
+// leadSec: antecipa a ENTRADA de cada legenda (prática padrão de legendagem —
+// legenda entrando um tiquinho antes da fala é percebida como sincronizada;
+// entrando depois, como atrasada). Nunca invade a legenda anterior.
+function snapToFrames(caps, fps, leadSec) {
   if (!fps || fps <= 0 || !caps || !caps.length) return caps;
+  const lead = leadSec || 0;
   const dur = 1 / fps;
   const out = [];
   let prevEnd = 0;
   for (let i = 0; i < caps.length; i++) {
-    let s = Math.round(caps[i].start / dur) * dur;
+    let s = Math.round(Math.max(0, caps[i].start - lead) / dur) * dur;
     let e = Math.round(caps[i].end / dur) * dur;
     if (s < prevEnd) s = prevEnd;          // não sobrepõe a legenda anterior
     if (e < s + dur) e = s + dur;          // pelo menos 1 frame de duração
