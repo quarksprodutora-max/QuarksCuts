@@ -597,6 +597,7 @@
                     }
                     return pTexto.then(function(txts) {
                         var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (txts[i] || c.text) }; });
+                        caps = eng.srtMod.capitalizeCaptions(caps); // 1ª legenda e pós-frase em maiúscula
                         return new Promise(function(resolve) {
                             // Alinha ao frame da sequência (senão o Premiere arredonda depois).
                             csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {

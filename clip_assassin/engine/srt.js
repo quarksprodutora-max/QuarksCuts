@@ -58,8 +58,8 @@ function agruparPorPontuacao(words, maxChars) {
 // pontuação geram legendas de 0,3-0,5s ("não,", "olha,") que piscam rápido
 // demais para ler. Funde com a próxima (ou anterior, se for a última) quando
 // o texto combinado continua curto o bastante para caber bem na tela.
-const MIN_CAP_DUR = 0.7;   // segundos
-const MERGE_MAX_CHARS = 38;
+const MIN_CAP_DUR = 0.55;  // segundos (só funde o que realmente pisca)
+const MERGE_MAX_CHARS = 22; // resultado curto (~20 chars): legenda de Reels é 1 linha grande
 
 function mergeShortCaptions(caps) {
   if (!caps || caps.length < 2) return caps;
@@ -89,6 +89,22 @@ function mergeShortCaptions(caps) {
       out.splice(i, 1); i--;
     }
     // sem vizinho que caiba: fica curta mesmo (melhor que texto gigante)
+  }
+  return out;
+}
+
+// Capitaliza o início das legendas: a PRIMEIRA do arquivo e toda legenda que
+// vem depois de uma que fechou frase (. ! ? …) começam com maiúscula —
+// independe do modelo/Gemini ter acertado.
+function capitalizeCaptions(caps) {
+  if (!caps || !caps.length) return caps;
+  const out = caps.map(function (c) { return { start: c.start, end: c.end, text: c.text }; });
+  let novaFrase = true;
+  for (let i = 0; i < out.length; i++) {
+    if (novaFrase) {
+      out[i].text = out[i].text.replace(/^(["'¿¡(]*)(\p{Ll})/u, function (m, p, l) { return p + l.toUpperCase(); });
+    }
+    novaFrase = /[.!?…]$/.test(out[i].text.trim());
   }
   return out;
 }
@@ -320,4 +336,4 @@ function parseSrtContent(content) {
   return caps;
 }
 
-module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, snapToFrames, parseSrtContent, mergeShortCaptions };
+module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, snapToFrames, parseSrtContent, mergeShortCaptions, capitalizeCaptions };

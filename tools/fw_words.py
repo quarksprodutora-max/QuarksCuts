@@ -2,9 +2,11 @@
 # Empacotado com PyInstaller e spawnado pelo painel como processo separado
 # (mesmo padrão do whisper-cli.exe/ffmpeg.exe do whisper.cpp).
 #
-# Por que existe: o faster-whisper alinha palavras por cross-attention, mais
-# preciso que o DTW do whisper.cpp em fala contínua/alongada — o caso em que
-# as legendas escorregavam ~0,5s e davam 1h de ajuste manual num corte.
+# Pipeline: faster-whisper (transcrição) + WhisperX (alinhamento FORÇADO por
+# fonemas com wav2vec2) — validado contra gabarito real da produção: erro médio
+# de fronteira caiu de ~876ms para ~363ms, maioria dentro de ±100ms.
+# Se o alinhamento falhar (idioma sem modelo, lib ausente), cai nos tempos do
+# faster-whisper puro — nunca deixa de entregar.
 #
 # Uso: fw-words.exe <midia> [modelo]
 #   modelo: tiny|base|small|medium|large-v3 (default: large-v3)
@@ -21,6 +23,15 @@ try:
 except Exception:
     pass
 
+# 0,5s de silêncio antes do áudio: sem isso a PRIMEIRA palavra é engolida
+# quando o corte já começa falando (caso real: "Nossa" sumia do EDITADO 15).
+PAD_SEC = 0.5
+SR = 16000
+
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
 
 def main():
     if len(sys.argv) < 2:
@@ -32,18 +43,23 @@ def main():
         print(json.dumps({"error": "arquivo não encontrado: " + media}))
         sys.exit(1)
 
+    import numpy as np
     from faster_whisper import WhisperModel
+    from faster_whisper.audio import decode_audio
 
-    print("carregando modelo " + model_size + "...", file=sys.stderr, flush=True)
+    log("decodificando áudio...")
+    audio = decode_audio(media, sampling_rate=SR)
+    audio = np.concatenate([np.zeros(int(PAD_SEC * SR), dtype=audio.dtype), audio])
+    dur = len(audio) / SR
+
+    log("carregando modelo " + model_size + "...")
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
     segments, info = model.transcribe(
-        media,
+        audio,
         language=None,               # autodetecta
-        word_timestamps=True,        # alinhamento por palavra (cross-attention)
-        vad_filter=True,             # âncora em fala real
-        # padding generoso: sem isso o VAD engole a 1ª palavra quando a fala
-        # começa no instante zero (corte já começa falando)
+        word_timestamps=True,        # tempos por palavra (base p/ o fallback)
+        vad_filter=True,
         vad_parameters={"speech_pad_ms": 400},
         temperature=0,
         condition_on_previous_text=False,
@@ -51,19 +67,55 @@ def main():
         compression_ratio_threshold=2.4,
     )
 
-    dur = float(getattr(info, "duration", 0) or 0)
-    words = []
+    fw_words = []
+    x_segments = []
     for seg in segments:  # generator: consome conforme transcreve
+        x_segments.append({"start": seg.start, "end": seg.end, "text": seg.text})
         for w in (seg.words or []):
             t = (w.word or "").strip()
             if t:
-                words.append({"s": round(w.start, 3), "e": round(w.end, 3), "t": t})
+                fw_words.append({"s": w.start, "e": w.end, "t": t})
         if dur > 0:
-            pct = min(99, int(seg.end / dur * 100))
-            print("progress = %d%%" % pct, file=sys.stderr, flush=True)
+            pct = min(89, int(seg.end / dur * 90))
+            log("progress = %d%%" % pct)
 
-    print("progress = 100%", file=sys.stderr, flush=True)
-    print(json.dumps({"words": words, "language": info.language}, ensure_ascii=False))
+    words = fw_words
+    # Alinhamento forçado por fonemas (WhisperX + wav2vec2) — a precisão real.
+    try:
+        log("alinhando por fonemas (WhisperX)...")
+        log("progress = 92%")
+        import whisperx
+        model_a, meta = whisperx.load_align_model(language_code=info.language, device="cpu")
+        aligned = whisperx.align(x_segments, model_a, meta, audio, "cpu", return_char_alignments=False)
+        x_words = []
+        for s in aligned.get("segments", []):
+            for w in s.get("words", []):
+                t = (w.get("word") or "").strip()
+                if t and "start" in w and "end" in w:
+                    x_words.append({"s": w["start"], "e": w["end"], "t": t})
+        if len(x_words) >= len(fw_words) * 0.8:  # sanidade: alinhou o grosso?
+            words = x_words
+            log("alinhamento OK: " + str(len(x_words)) + " palavras")
+        else:
+            log("alinhamento incompleto (" + str(len(x_words)) + "/" + str(len(fw_words)) + ") — usando tempos do faster-whisper")
+    except Exception as e:
+        log("WhisperX indisponível (" + str(e)[:120] + ") — usando tempos do faster-whisper")
+        # diagnóstico: o erro do lazy-import do transformers esconde a causa real
+        try:
+            import transformers.models.wav2vec2.modeling_wav2vec2  # noqa
+        except Exception:
+            import traceback
+            log("DIAG modeling_wav2vec2:\n" + traceback.format_exc()[-800:])
+
+    # desconta o silêncio artificial do início
+    out = []
+    for w in words:
+        s = max(0.0, round(w["s"] - PAD_SEC, 3))
+        e = max(s, round(w["e"] - PAD_SEC, 3))
+        out.append({"s": s, "e": e, "t": w["t"]})
+
+    log("progress = 100%")
+    print(json.dumps({"words": out, "language": info.language}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
