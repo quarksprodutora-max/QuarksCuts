@@ -1,4 +1,4 @@
-// Transcrição offline dentro do painel CEP (Node habilitado no manifest).
+﻿// Transcrição offline dentro do painel CEP (Node habilitado no manifest).
 // Fluxo: ffmpeg (extrai WAV 16kHz mono) -> whisper-cli.exe (whisper.cpp, -oj)
 // -> parseia o JSON de saída em segmentos { start, end, text } (em segundos).
 //
@@ -23,10 +23,11 @@ function loadConfig() {
 }
 
 // Resolve um binário do config: caminho ABSOLUTO usa direto; caminho RELATIVO
-// é resolvido dentro de bin/ (bundle portável). Se nada bater, tenta o default
-// em bin/. Retorna null se não achar.
+// é resolvido dentro de bin/ (bundle portável). String vazia ou caminho inválido
+// ignora o config e tenta o default em bin/ — assim um config.json "zerado"
+// (instalado em outra máquina) funciona com o bundle sem edição manual.
 function resolveBin(cfgPath, defaultName) {
-  if (cfgPath) {
+  if (cfgPath && String(cfgPath).trim()) {
     var c = path.isAbsolute(cfgPath) ? cfgPath : path.join(BIN_DIR, cfgPath);
     if (fs.existsSync(c)) return c;
   }
@@ -40,6 +41,7 @@ function resolveBin(cfgPath, defaultName) {
 // config (quem guarda os modelos fora da extensão, como no INSTALL.bat da
 // máquina de desenvolvimento, tem todos os .bin lado a lado).
 function resolveModelo(override, cfgModel) {
+  if (!cfgModel || !String(cfgModel).trim()) cfgModel = null;
   if (override) {
     if (path.isAbsolute(override)) return fs.existsSync(override) ? override : null;
     var noBin = path.join(BIN_DIR, override);
@@ -56,7 +58,7 @@ function resolveModelo(override, cfgModel) {
 // Sem saída por este tempo = processo travado (ex.: Windows suspendeu no meio
 // e o processo nunca voltou) → mata e retorna erro claro, em vez de o painel
 // ficar "Transcrevendo…" para sempre.
-const STALL_MS = 10 * 60 * 1000;
+const STALL_MS = 20 * 60 * 1000;
 
 function run(cmd, args, onStderr, collect) {
   return new Promise((resolve, reject) => {

@@ -125,7 +125,8 @@ begin
     CfgPath := ExpandConstant('{localappdata}\Programs\QuarksCuts\config.json');
     Cfg := '{' + #13#10 +
            '  "gemini_api_key": "' + Key + '",' + #13#10 +
-           '  "clip_model": "gemini-flash-latest"' + #13#10 +
+           '  "clip_model": "gemini-3.6-flash",' + #13#10 +
+           '  "clip_model_fallback": "gemini-3.5-flash-lite"' + #13#10 +
            '}' + #13#10;
     SaveStringToFile(CfgPath, AnsiString(Cfg), False);
   end;

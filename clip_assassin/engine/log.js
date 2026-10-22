@@ -1,4 +1,4 @@
-// Log em arquivo do painel Quarks Cuts — diário de tudo que acontece, para
+﻿// Log em arquivo do painel Quarks Cuts — diário de tudo que acontece, para
 // diagnosticar problemas nas máquinas da equipe sem depender de print de tela.
 //
 // Destino: %APPDATA%\QuarksCuts\panel.log (a pasta da extensão fica em Program

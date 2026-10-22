@@ -1,9 +1,24 @@
-# Binários grandes do fluxo "Gerar cortes" (baixados manualmente — ver bin/README.md)
+# Binarios grandes do fluxo "Gerar cortes" (baixados manualmente - ver bin/README.md)
 clip_assassin/bin/*
 !clip_assassin/bin/README.md
 
-# Chave real do Gemini fica fora do Git; versionamos só o config.example.json.
+# Chave real do Gemini e configuracoes locais
 clip_assassin/engine/config.json
+.env
 
-# Pacote de distribuição (contém a chave embutida) — nunca versionar.
+# Pacote de distribuicao (contem a chave embutida) - nunca versionar.
 _dist/
+
+# Backups e arquivos temporarios
+*.bak
+*.bak*
+*.tmp
+*.log
+*.rar
+
+# Outros projetos / pastas de manutencao local
+social_poster/
+social_poster.rar
+old_scripts/
+fix_json_bom.ps1
+install_fw_words.ps1

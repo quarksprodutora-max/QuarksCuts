@@ -417,6 +417,31 @@ function qcGetMediaPath(srcIndex) {
     }
 }
 
+// Garante o Adobe Media Encoder em segundo plano.
+// No Premiere 2025+, o exportAsMediaDirect delega a renderização ao AME; se ele
+// não estiver rodando, a exportação falha silenciosamente (arquivo não gerado).
+function qcEnsureMediaEncoder() {
+    try {
+        if (typeof BridgeTalk !== "undefined" && BridgeTalk.isRunning("ame")) return true;
+    } catch (e) {}
+    try {
+        // Abre o AME invisível via BridgeTalk (disponível em todos os apps da suíte)
+        if (typeof BridgeTalk !== "undefined") {
+            var bt = new BridgeTalk();
+            bt.target = "ame";
+            bt.send();
+            // Espera até o AME responder (máx. ~60s)
+            for (var w = 0; w < 600; w++) {
+                try {
+                    if (BridgeTalk.isRunning("ame")) return true;
+                } catch (e2) {}
+                $.sleep(100);
+            }
+        }
+    } catch (e) {}
+    return false;
+}
+
 // Exporta o ÁUDIO da SEQUÊNCIA ATIVA para outPath, usando um preset .epr de áudio.
 // Síncrono (bloqueia até terminar). Os timestamps da transcrição ficam alinhados
 // à timeline da sequência — que é a mesma fonte usada para montar os cortes.
@@ -428,13 +453,388 @@ function qcExportActiveAudio(presetPath, outPath) {
         var pf = new File(presetPath);
         if (!pf.exists) return "ERROR: Preset de áudio (.epr) não encontrado: " + presetPath;
 
+        qcEnsureMediaEncoder();
+
         var waType;
         try { waType = app.encoder.ENCODE_ENTIRE; } catch (e) { waType = 0; }
         try { seq.exportAsMediaDirect(outPath, presetPath, waType); }
         catch (e) { return "ERROR: Falha na exportação: " + e.toString(); }
 
+        // Renderização delegada ao AME: aguarda o arquivo aparecer (máx. 10 min).
         var of = new File(outPath);
-        if (!of.exists) return "ERROR: A exportação não gerou o arquivo. Confirme que o preset é de ÁUDIO.";
+        for (var w = 0; w < 6000 && !of.exists; w++) { $.sleep(100); of = new File(outPath); }
+        if (!of.exists) return "ERROR: A exportação não gerou o arquivo. Confirme que o preset é de ÁUDIO e que o Adobe Media Encoder está instalado.";
+        return "OK:" + outPath;
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// ====================================================================
+// LEGENDA EM LOTE POR COMPARTIMENTO (BIN / PASTA)
+// ====================================================================
+
+function qcCollectBinsRecursive(item, currentPath, arr) {
+    if (!item || !item.children) return arr;
+    for (var i = 0; i < item.children.numItems; i++) {
+        var ch = item.children[i];
+        var isBin = false;
+        try { isBin = (ch.type === 2); } catch (e) {}
+        if (isBin) {
+            var fullPath = currentPath ? (currentPath + "/" + ch.name) : ch.name;
+            var nid = "";
+            try { nid = ch.nodeId; } catch (e) {}
+            arr.push({ name: ch.name, path: fullPath, nodeId: nid });
+            qcCollectBinsRecursive(ch, fullPath, arr);
+        }
+    }
+    return arr;
+}
+
+// Retorna todos os compartimentos (bins) do projeto como JSON
+function qcListBins() {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var arr = qcCollectBinsRecursive(app.project.rootItem, "", []);
+        return "OK:" + JSON.stringify(arr);
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Verifica se um projectItem é uma sequência ou corte, de forma resiliente
+function qcIsItemSequence(ch) {
+    if (!ch) return false;
+    try {
+        if (typeof ch.isSequence === "function" && ch.isSequence()) return true;
+    } catch (e1) {}
+    try {
+        if (ch.isSequence === true) return true;
+    } catch (e2) {}
+    try {
+        if (app.project && app.project.sequences) {
+            var chNid = "";
+            try { chNid = ch.nodeId; } catch (eN) {}
+            var chName = (ch.name || "").toLowerCase();
+            for (var s = 0; s < app.project.sequences.numSequences; s++) {
+                var sq = app.project.sequences[s];
+                if (!sq) continue;
+                try {
+                    if (sq.projectItem && (sq.projectItem === ch || (chNid && sq.projectItem.nodeId === chNid))) return true;
+                } catch (e3) {}
+                try {
+                    if (sq.name && sq.name.toLowerCase() === chName) return true;
+                } catch (e4) {}
+            }
+        }
+    } catch (e5) {}
+    return false;
+}
+
+// Localiza um compartimento por nodeId, caminho ou nome (com suporte a case-insensitive e busca prioritária por bins com itens)
+function qcFindBinRecursive(item, target) {
+    if (!item || !item.children) return null;
+    var tLow = (target || "").toLowerCase();
+    var fallbackMatch = null;
+
+    for (var i = 0; i < item.children.numItems; i++) {
+        var ch = item.children[i];
+        var isBin = false;
+        try { isBin = (ch.type === 2); } catch (e) {}
+        if (isBin) {
+            var nid = "";
+            try { nid = ch.nodeId; } catch (e) {}
+            var cName = (ch.name || "");
+            var cLow = cName.toLowerCase();
+
+            if (nid === target || cLow === tLow || cName === target) {
+                if (ch.children && ch.children.numItems > 0) {
+                    return ch;
+                } else if (!fallbackMatch) {
+                    fallbackMatch = ch;
+                }
+            }
+            var sub = qcFindBinRecursive(ch, target);
+            if (sub) {
+                if (sub.children && sub.children.numItems > 0) return sub;
+                if (!fallbackMatch) fallbackMatch = sub;
+            }
+        }
+    }
+    return fallbackMatch;
+}
+
+// Lista todos os itens (sequencias e clipes) dentro de um compartimento como JSON.
+function qcListItemsInBin(binTarget) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var bin = null;
+        if (!binTarget || binTarget === "root" || binTarget === "") {
+            bin = app.project.rootItem;
+        } else {
+            bin = qcFindBinRecursive(app.project.rootItem, binTarget);
+        }
+        if (!bin && app.project.rootItem && app.project.rootItem.children) {
+            var bLow = (binTarget || "").toLowerCase();
+            for (var r = 0; r < app.project.rootItem.children.numItems; r++) {
+                var rCh = app.project.rootItem.children[r];
+                var rBin = false;
+                try { rBin = (rCh.type === 2); } catch (eR) {}
+                if (rBin && rCh.name && rCh.name.toLowerCase() === bLow) {
+                    bin = rCh;
+                    break;
+                }
+            }
+        }
+        if (!bin) return "ERROR: Compartimento '" + binTarget + "' nao encontrado.";
+
+        var out = [];
+        var num = 0;
+        try { num = bin.children.numItems; } catch (eNum) { num = 0; }
+
+        for (var i = 0; i < num; i++) {
+            var ch = bin.children[i];
+            if (!ch) continue;
+            var isBin = false;
+            try { isBin = (ch.type === 2); } catch (e) {}
+            if (isBin) continue;
+
+            var isSeq = qcIsItemSequence(ch);
+            var mediaPath = "";
+            try { mediaPath = ch.getMediaPath(); } catch (e) {}
+            var nid = "";
+            try { nid = ch.nodeId; } catch (e) {}
+
+            out.push({
+                name: ch.name || "",
+                type: isSeq ? "seq" : "clip",
+                nodeId: nid,
+                mediaPath: mediaPath
+            });
+        }
+        return "OK:" + JSON.stringify(out);
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Localiza uma sequencia por nome, nodeId, sequenceID ou prefixo (ex: 'EDITADO 03')
+function qcFindSequence(targetNameOrId, targetNodeId) {
+    if (!app.project) return null;
+    var tRaw = targetNameOrId || "";
+    var tTrim = trim(tRaw);
+    var tLow = tTrim.toLowerCase();
+    var nTrim = trim(targetNodeId || "");
+
+    for (var s = 0; s < app.project.sequences.numSequences; s++) {
+        var curSeq = app.project.sequences[s];
+        if (!curSeq) continue;
+        var sqName = trim(curSeq.name || "");
+        var sqLow = sqName.toLowerCase();
+        var sqId = String(curSeq.sequenceID || "");
+
+        // 1. Match por nodeId do projectItem ou sequenceID
+        if (nTrim && curSeq.projectItem && curSeq.projectItem.nodeId === nTrim) return curSeq;
+        if (sqId === tTrim || sqId === nTrim) return curSeq;
+
+        // 2. Match por nome exato (ou case-insensitive)
+        if (sqName === tTrim || sqLow === tLow || sqName === tRaw) return curSeq;
+
+        // 3. Match por prefixo ou substring (ex: 'EDITADO 03 ' dentro de 'EDITADO 03 |45s|- Titulo')
+        if (tTrim && (sqName.indexOf(tTrim) === 0 || sqLow.indexOf(tLow) === 0)) return curSeq;
+
+        // 4. Checa no projectItem da sequencia
+        try {
+            if (curSeq.projectItem) {
+                var pNid = curSeq.projectItem.nodeId || "";
+                var pNm = trim(curSeq.projectItem.name || "");
+                var pLow = pNm.toLowerCase();
+                if ((nTrim && pNid === nTrim) || (tTrim && pNid === tTrim)) return curSeq;
+                if (pNm === tTrim || pLow === tLow || (tTrim && (pNm.indexOf(tTrim) === 0 || pLow.indexOf(tLow) === 0))) return curSeq;
+            }
+        } catch (e1) {}
+    }
+    return null;
+}
+
+// Localiza um ProjectItem recursivamente pelo caminho do arquivo
+function qcFindProjectItemByPath(rootItem, filePath) {
+    if (!rootItem || !rootItem.children) return null;
+    var fNorm = (filePath || "").replace(/\\/g, '/').toLowerCase();
+    var fName = "";
+    try {
+        var parts = fNorm.split('/');
+        fName = parts[parts.length - 1];
+    } catch (e) {}
+
+    for (var i = 0; i < rootItem.children.numItems; i++) {
+        var ch = rootItem.children[i];
+        if (!ch) continue;
+        var mPath = "";
+        try { mPath = (ch.getMediaPath() || "").replace(/\\/g, '/').toLowerCase(); } catch (eM) {}
+        if (mPath && mPath === fNorm) return ch;
+        if (ch.name && fName && ch.name.toLowerCase() === fName) return ch;
+        var isBin = false;
+        try { isBin = (ch.type === 2); } catch (eB) {}
+        if (isBin) {
+            var sub = qcFindProjectItemByPath(ch, filePath);
+            if (sub) return sub;
+        }
+    }
+    return null;
+}
+
+// Localiza um ProjectItem por nome exato ou sem extensao
+function qcFindItemByName(rootItem, name) {
+    if (!rootItem || !rootItem.children) return null;
+    var nLow = trim(name || "").toLowerCase();
+    for (var i = 0; i < rootItem.children.numItems; i++) {
+        var ch = rootItem.children[i];
+        if (!ch) continue;
+        var cNm = trim(ch.name || "").toLowerCase();
+        if (cNm === nLow || cNm.replace(/\.[^.]+$/, '') === nLow) return ch;
+        var isBin = false;
+        try { isBin = (ch.type === 2); } catch (eB) {}
+        if (isBin) {
+            var sub = qcFindItemByName(ch, name);
+            if (sub) return sub;
+        }
+    }
+    return null;
+}
+
+// Anexa um arquivo SRT a uma sequencia como faixa de legenda (Caption Track) no timecode 00:00:00:00
+// e opcionalmente importa e associa o estilo .prtextstyle
+function qcAttachSrtToSequence(seqTarget, srtPath, stylePath, seqNodeId) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var seq = qcFindSequence(seqTarget, seqNodeId);
+        if (!seq) return "ERROR: Sequencia '" + seqTarget + "' nao encontrada.";
+
+        var sf = new File(srtPath);
+        if (!sf.exists) return "ERROR: Arquivo SRT nao existe no disco: " + srtPath;
+
+        var legBin = qcGetOrCreateBin('legendas');
+
+        // 1. Garante que o .srt esta importado no projeto
+        var srtItem = qcFindProjectItemByPath(app.project.rootItem, srtPath);
+        if (!srtItem) {
+            try { app.project.importFiles([srtPath], true, legBin, false); } catch (eImp) {}
+            srtItem = qcFindProjectItemByPath(app.project.rootItem, srtPath);
+        }
+        if (!srtItem) return "ERROR: Falha ao obter ProjectItem do SRT importado.";
+
+        // 2. Se um .prtextstyle foi fornecido, importa para o projeto (caso ainda nao esteja)
+        var styleItem = null;
+        if (!stylePath || trim(stylePath) === "") {
+            var defaultStyle = "C:\\Program Files (x86)\\Common Files\\Adobe\\CEP\\extensions\\quarks_cuts\\presets\\Quarks Podcast.prtextstyle";
+            if (new File(defaultStyle).exists) {
+                stylePath = defaultStyle;
+            }
+        }
+        if (stylePath && trim(stylePath) !== "") {
+            var stf = new File(stylePath);
+            if (stf.exists) {
+                styleItem = qcFindProjectItemByPath(app.project.rootItem, stylePath);
+                if (!styleItem) {
+                    var sParts = stylePath.replace(/\\/g, '/').split('/');
+                    var baseStyleName = sParts[sParts.length - 1].replace(/\.prtextstyle$/i, '');
+                    styleItem = qcFindItemByName(app.project.rootItem, baseStyleName);
+                }
+                if (!styleItem) {
+                    try { app.project.importFiles([stylePath], true, legBin, false); } catch (eImpSt) {}
+                    styleItem = qcFindProjectItemByPath(app.project.rootItem, stylePath);
+                }
+            }
+        }
+
+        // 3. Abre a sequencia e torna ela ativa
+        try {
+            app.project.openSequence(seq.sequenceID);
+            app.project.activeSequence = seq;
+        } catch (eSeqOpen) {}
+
+        // 4. Cria a faixa de legenda (Caption Track) na timeline com timecode inicial 00:00:00:00
+        var trackCreated = false;
+        var errDetail = "";
+        if (typeof seq.createCaptionTrack === "function") {
+            var capFormat = 0;
+            try {
+                if (typeof Sequence !== "undefined" && Sequence.CAPTION_FORMAT_SUBTITLE !== undefined) {
+                    capFormat = Sequence.CAPTION_FORMAT_SUBTITLE;
+                }
+            } catch (eC) {}
+
+            try {
+                if (styleItem) {
+                    try { trackCreated = seq.createCaptionTrack(srtItem, 0, capFormat, styleItem); }
+                    catch (eS1) { trackCreated = false; }
+                }
+                if (!trackCreated) {
+                    trackCreated = seq.createCaptionTrack(srtItem, 0, capFormat);
+                }
+            } catch (eCr1) {
+                try {
+                    trackCreated = seq.createCaptionTrack(srtItem, 0);
+                } catch (eCr2) {
+                    errDetail = eCr2.toString();
+                }
+            }
+        } else {
+            return "ERROR: Este Premiere Pro nao possui a API 'createCaptionTrack' disponivel.";
+        }
+
+        if (trackCreated === false && errDetail) {
+            return "ERROR: Falha ao criar faixa de legenda: " + errDetail;
+        }
+
+        return "OK:" + seq.name;
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Anexa um arquivo SRT a sequencia ativa na timeline
+function qcAttachSrtToActiveSequence(srtPath, stylePath) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var seq = app.project.activeSequence;
+        if (!seq) return "ERROR: Nenhuma sequencia ativa na timeline.";
+        return qcAttachSrtToSequence(seq.name, srtPath, stylePath);
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Exporta o audio de uma sequencia especifica (por nome ou nodeId de projectItem)
+function qcExportSequenceAudio(targetNameOrId, presetPath, outPath, targetNodeId) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var seq = qcFindSequence(targetNameOrId, targetNodeId);
+        if (!seq) return "ERROR: Sequencia '" + targetNameOrId + "' nao encontrada.";
+
+        var pf = new File(presetPath);
+        if (!pf.exists) return "ERROR: Preset de audio (.epr) nao encontrado: " + presetPath;
+
+        qcEnsureMediaEncoder();
+
+        try {
+            app.project.openSequence(seq.sequenceID);
+            app.project.activeSequence = seq;
+        } catch (eSeq) {}
+
+        var waType;
+        try { waType = app.encoder.ENCODE_ENTIRE; } catch (e) { waType = 0; }
+
+        var of = new File(outPath);
+        if (of.exists) { try { of.remove(); } catch (eRem) {} }
+
+        try { seq.exportAsMediaDirect(outPath, presetPath, waType); }
+        catch (e) { return "ERROR: Falha na exportacao: " + e.toString(); }
+
+        for (var w = 0; w < 6000 && !of.exists; w++) { $.sleep(100); of = new File(outPath); }
+        if (!of.exists) return "ERROR: A exportacao nao gerou o audio para '" + seq.name + "'.";
+
         return "OK:" + outPath;
     } catch (e) {
         return "ERROR: " + e.toString();
@@ -649,6 +1049,8 @@ function qcClearSequence(seq) {
 
 // Ajusta o tamanho do quadro da sequência (sem reescalar os clipes).
 // aspect: "9x16" (1080x1920) ou "16x9" (1920x1080). Qualquer outro valor = não mexe.
+// Usado como FALLBACK quando o Auto Reframe real (qcAutoReframeSequence) não
+// está disponível ou falha — não faz rastreamento, só muda a resolução.
 function qcApplyAspect(seq, aspect) {
     if (aspect !== '9x16' && aspect !== '16x9') return;
     try {
@@ -659,9 +1061,48 @@ function qcApplyAspect(seq, aspect) {
     } catch (e) {}
 }
 
+// Espera a sequência terminar a análise interna que o Auto Reframe precisa
+// (Premiere expõe isso via isDoneAnalyzingForVideoEffects()). Sem essa espera,
+// autoReframeSequence() pode falhar com "análise incompleta". maxTriesX500ms.
+function qcWaitAnalysisReady(seq, maxTries) {
+    if (typeof seq.isDoneAnalyzingForVideoEffects !== 'function') return true; // API não existe: assume pronto
+    var tries = 0;
+    while (!seq.isDoneAnalyzingForVideoEffects() && tries < maxTries) {
+        $.sleep(500);
+        tries++;
+    }
+    try { return seq.isDoneAnalyzingForVideoEffects(); } catch (e) { return true; }
+}
+
+// Reenquadramento vertical DE VERDADE: usa a API nativa autoReframeSequence
+// do Premiere, que analisa o conteúdo visual e aplica keyframes de posição
+// rastreando o orador — não é só trocar a resolução. Gera uma sequência NOVA
+// (não modifica a original). Retorna a nova Sequence, ou null se a API não
+// existir nessa versão do Premiere ou a chamada falhar (chamador decide o
+// fallback pro reenquadramento simples).
+function qcAutoReframeSequence(seq, novoNome) {
+    try {
+        if (typeof seq.autoReframeSequence !== 'function') return null; // Premiere sem essa API
+        qcWaitAnalysisReady(seq, 20); // até ~10s de espera
+        var novaSeq = seq.autoReframeSequence(9, 16, 'default', novoNome, false);
+        return novaSeq || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Move o projectItem de uma sequência pra um bin específico. Best-effort —
+// se a versão do Premiere não suportar moveBin nesse contexto, a sequência
+// fica onde o autoReframeSequence a criou (geralmente a raiz do projeto).
+function qcMoveSequenceToBin(seq, bin) {
+    try { if (seq && seq.projectItem && bin) seq.projectItem.moveBin(bin); } catch (e) {}
+}
+
 // srcIndex: índice na lista do qcListSources (qual clipe/sequência usar como fonte).
 // aspect (opcional): "9x16" ou "16x9" para o quadro da sequência do corte.
-function quarksCutsBuild(name, rangesStr, srcIndex, aspect) {
+// gapSec (opcional): segundos de espaço em branco entre um corte e o próximo
+// (avança o cursor da timeline sem preencher nada). 0 ou omitido = colado, igual antes.
+function quarksCutsBuild(name, rangesStr, srcIndex, aspect, gapSec) {
     try {
         if (!app.project) return "ERROR: Abra um projeto primeiro.";
         var project = app.project;
@@ -687,6 +1128,9 @@ function quarksCutsBuild(name, rangesStr, srcIndex, aspect) {
         }
         if (ranges.length === 0) return "ERROR: Nenhum trecho válido para '" + name + "'.";
 
+        var gap = parseFloat(gapSec);
+        if (isNaN(gap) || gap < 0) gap = 0;
+
         var seqName = name;  // já vem formatado do painel: "01 |25s|- Título"
         var cortesBin = qcGetOrCreateBin('cortes');
         var newSeq = project.createNewSequenceFromClips(seqName, [master], cortesBin);
@@ -694,9 +1138,10 @@ function quarksCutsBuild(name, rangesStr, srcIndex, aspect) {
         // NÃO ativar a sequência na timeline: com muitos cortes de um episódio
         // longo, abrir uma aba por corte (waveform/thumbnails do nest de horas)
         // deixava a montagem lentíssima (~13 min/corte medidos).
-        qcApplyAspect(newSeq, aspect);
 
-        // Esvazia a timeline auto-criada e insere só os trechos, na ordem
+        // Esvazia a timeline auto-criada e insere só os trechos, na ordem,
+        // SEMPRE no formato nativo (16:9) primeiro — o Auto Reframe real
+        // precisa analisar o conteúdo já montado, não uma timeline vazia.
         qcClearSequence(newSeq);
         var vt = newSeq.videoTracks[0];
         var pos = 0;
@@ -705,8 +1150,18 @@ function quarksCutsBuild(name, rangesStr, srcIndex, aspect) {
             master.setOutPoint(ranges[j].e, 4);
             vt.insertClip(master, pos);
             pos += (ranges[j].e - ranges[j].s);
+            if (gap > 0 && j < ranges.length - 1) pos += gap;
         }
         try { master.clearInPoint(); master.clearOutPoint(); } catch (e) {}
+
+        if (aspect === '9x16') {
+            // Auto Reframe desativado (bugs nativos do Premiere).
+            // Volta pro reenquadramento simples (só muda resolução, sem rastreamento).
+            qcApplyAspect(newSeq, aspect);
+            return "SUCCESS: '" + seqName + "' (" + ranges.length + " trechos) [vertical simples — Auto Reframe desativado]";
+        } else if (aspect === '16x9') {
+            qcApplyAspect(newSeq, aspect);
+        }
 
         return "SUCCESS: '" + seqName + "' (" + ranges.length + " trechos)";
     } catch (e) {
@@ -908,6 +1363,245 @@ function quarksUnnestActive() {
         var msg = "SUCCESS: ✓ " + expanded + " nest(s) desaninhado(s), " + totalPlaced + " clipe(s) recolocado(s).";
         if (failed > 0) msg += " (" + failed + " não mapeado(s) à sequência-fonte)";
         return msg;
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Adiciona marcadores de capítulo na timeline da sequência ativa.
+// chaptersStr: "timestamp_segundos|Título do Capítulo\n..."
+function qcAddChapterMarkers(chaptersStr) {
+    try {
+        if (!app.project || !app.project.activeSequence) return "ERROR: Nenhuma sequência ativa.";
+        var seq = app.project.activeSequence;
+        var lines = chaptersStr.split('\n');
+        var added = 0;
+        for (var i = 0; i < lines.length; i++) {
+            var line = trim(lines[i]);
+            if (!line) continue;
+            var parts = line.split('|');
+            if (parts.length < 2) continue;
+            var sec = parseFloat(parts[0]);
+            var name = parts[1];
+            if (isNaN(sec)) continue;
+            var m = seq.markers.createMarker(sec);
+            if (m) {
+                m.name = name;
+                added++;
+            }
+        }
+        return "SUCCESS: " + added + " marcadores de capítulo adicionados à timeline.";
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+// Mesma coisa, mas numa sequência específica por NOME em vez da ativa — usado
+// depois da remontagem de episódio, onde a sequência nova não é ativada
+// (por performance, ver comentário em quarksCutsBuild).
+function qcAddChapterMarkersToSequence(seqName, chaptersStr) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var seq = null;
+        for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            if (app.project.sequences[s].name === seqName) { seq = app.project.sequences[s]; break; }
+        }
+        if (!seq) return "ERROR: Sequência '" + seqName + "' não encontrada.";
+        var lines = chaptersStr.split('\n');
+        var added = 0;
+        for (var i = 0; i < lines.length; i++) {
+            var line = trim(lines[i]);
+            if (!line) continue;
+            var parts = line.split('|');
+            if (parts.length < 2) continue;
+            var sec = parseFloat(parts[0]);
+            var name = parts[1];
+            if (isNaN(sec)) continue;
+            var m = seq.markers.createMarker(sec);
+            if (m) {
+                m.name = name;
+                added++;
+            }
+        }
+        return "SUCCESS: " + added + " marcadores de capítulo adicionados a '" + seqName + "'.";
+    } catch (e) {
+        return "ERROR: " + e.toString();
+    }
+}
+
+
+
+// =========================================================================
+// MODULO DE ACABAMENTOS (REMOCAO DE RESPIROS & J-CUT AUTOMATICO)
+// =========================================================================
+
+function qcEnsureAcabamentosEngines() {
+    try {
+        if (typeof AutoCut === "undefined") {
+            var cutPaths = [
+                (function() { try { return new File($.fileName).parent.fsName + "/autocut-engine.jsx"; } catch(e){ return ""; } })(),
+                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/quarks_cuts/jsx/autocut-engine.jsx",
+                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/com.brainstorm.premiere.autocut/host/main.jsx"
+            ];
+            for (var c = 0; c < cutPaths.length; c++) {
+                if (cutPaths[c]) {
+                    var f = new File(cutPaths[c]);
+                    if (f.exists) {
+                        $.evalFile(f);
+                        break;
+                    }
+                }
+            }
+        }
+    } catch (eCut) {}
+
+    try {
+        if (typeof AutoJCut === "undefined") {
+            var jcutPaths = [
+                (function() { try { return new File($.fileName).parent.fsName + "/autojcut-engine.jsx"; } catch(e){ return ""; } })(),
+                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/quarks_cuts/jsx/autojcut-engine.jsx",
+                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/com.brainstorm.premiere.autojcut/host/main.jsx"
+            ];
+            for (var j = 0; j < jcutPaths.length; j++) {
+                if (jcutPaths[j]) {
+                    var fj = new File(jcutPaths[j]);
+                    if (fj.exists) {
+                        $.evalFile(fj);
+                        break;
+                    }
+                }
+            }
+        }
+    } catch (eJcut) {}
+}
+
+function qcGetTimelineContext() {
+    try {
+        if (!app.project) {
+            return JSON.stringify({ ok: false, error: "Nenhum projeto aberto no Premiere." });
+        }
+        var seq = app.project.activeSequence;
+        if (!seq) {
+            return JSON.stringify({ ok: false, error: "Nenhuma sequencia ativa no Premiere. Abra a timeline do seu corte." });
+        }
+        var tracks = [];
+        var numTracks = 0;
+        try { numTracks = seq.audioTracks.numTracks; } catch (e1) { numTracks = 0; }
+        for (var i = 0; i < numTracks; i++) {
+            var trk = seq.audioTracks[i];
+            var tName = "A" + (i + 1);
+            try { if (trk && trk.name) tName = trk.name; } catch (e2) {}
+            var clipCount = 0;
+            try { clipCount = trk.clips.numItems; } catch (e3) {}
+            tracks.push({ index: i, name: tName, clipCount: clipCount });
+        }
+
+        var durationSec = 0;
+        try {
+            var endTicks = seq.end;
+            if (endTicks !== undefined) {
+                durationSec = Number(endTicks) / 254016000000;
+            }
+        } catch (e4) {}
+
+        return JSON.stringify({
+            ok: true,
+            data: {
+                sequenceName: seq.name,
+                sequenceId: String(seq.sequenceID),
+                durationSeconds: durationSec,
+                audioTracks: tracks
+            }
+        });
+    } catch (e) {
+        return JSON.stringify({ ok: false, error: e.toString() });
+    }
+}
+
+function qcExportSilenceRefAudio(jsonStr) {
+    qcEnsureAcabamentosEngines();
+    if (typeof AutoCut === "undefined" || !AutoCut.exportReferenceTrack) {
+        return JSON.stringify({ ok: false, error: "Motor AutoCut nao pode ser carregado. Verifique os arquivos jsx." });
+    }
+    return AutoCut.exportReferenceTrack(jsonStr);
+}
+
+function qcDuplicateActiveSequence() {
+    qcEnsureAcabamentosEngines();
+    if (typeof AutoCut !== "undefined" && AutoCut.duplicateActiveSequence) {
+        return AutoCut.duplicateActiveSequence();
+    }
+    if (typeof AutoJCut !== "undefined" && AutoJCut.duplicateActiveSequence) {
+        return AutoJCut.duplicateActiveSequence();
+    }
+    return JSON.stringify({ ok: false, error: "Funcao de duplicacao nao disponivel." });
+}
+
+function qcApplySilenceCuts(jsonStr) {
+    qcEnsureAcabamentosEngines();
+    if (typeof AutoCut === "undefined" || !AutoCut.applyCuts) {
+        return JSON.stringify({ ok: false, error: "Motor AutoCut nao disponivel." });
+    }
+    return AutoCut.applyCuts(jsonStr);
+}
+
+function qcRestoreSilenceBackup(jsonStr) {
+    qcEnsureAcabamentosEngines();
+    if (typeof AutoCut === "undefined" || !AutoCut.restoreBackup) {
+        return JSON.stringify({ ok: false, error: "Motor AutoCut nao disponivel." });
+    }
+    return AutoCut.restoreBackup(jsonStr);
+}
+
+function qcApplyJCuts(jsonStr) {
+    qcEnsureAcabamentosEngines();
+    if (typeof AutoJCut === "undefined" || !AutoJCut.generateJCuts) {
+        return JSON.stringify({ ok: false, error: "Motor AutoJCut nao disponivel." });
+    }
+    return AutoJCut.generateJCuts(jsonStr);
+}
+
+function qcRestoreJCutBackup(jsonStr) {
+    qcEnsureAcabamentosEngines();
+    if (typeof AutoJCut === "undefined" || !AutoJCut.restoreBackup) {
+        return JSON.stringify({ ok: false, error: "Motor AutoJCut nao disponivel." });
+    }
+    return AutoJCut.restoreBackup(jsonStr);
+}
+
+// Importa o arquivo de overlay de legenda animada (.mov) e insere na trilha V2 acima do corte
+function qcImportAndPlaceOverlay(movPath) {
+    try {
+        if (!app.project) return "ERROR: Abra um projeto primeiro.";
+        var seq = app.project.activeSequence;
+        if (!seq) return "ERROR: Nenhuma sequencia ativa.";
+
+        var bin = qcGetOrCreateBin('legendas');
+        app.project.importFiles([movPath], true, bin, false);
+
+        var pItem = null;
+        for (var i = 0; i < bin.children.numItems; i++) {
+            var item = bin.children[i];
+            if (item && item.getMediaPath && item.getMediaPath().toLowerCase() === movPath.toLowerCase()) {
+                pItem = item;
+                break;
+            }
+        }
+        if (!pItem) {
+            for (var j = 0; j < app.project.rootItem.children.numItems; j++) {
+                var it = app.project.rootItem.children[j];
+                if (it && it.getMediaPath && it.getMediaPath().toLowerCase() === movPath.toLowerCase()) {
+                    pItem = it;
+                    break;
+                }
+            }
+        }
+        if (!pItem) return "ERROR: Arquivo importado nao encontrado no projeto.";
+
+        qcEnsureTracks(seq, 2, 0);
+        var targetTrack = (seq.videoTracks.numTracks > 1) ? seq.videoTracks[1] : seq.videoTracks[0];
+        targetTrack.overwriteClip(pItem, 0);
+        return "SUCCESS: Legenda animada inserida na trilha V2 da timeline!";
     } catch (e) {
         return "ERROR: " + e.toString();
     }

@@ -29,7 +29,7 @@ function agruparPorPontuacao(words, maxChars) {
   var out = [], cur = null;
   var fechaEm = /[,.!?;:…]$/;
   for (var i = 0; i < words.length; i++) {
-    var t = (words[i].text || '').replace(/^\s+|\s+$/g, '');
+    var t = (words[i].text || words[i].word || '').replace(/^\s+|\s+$/g, '');
     if (!t) continue;
     if (cur === null) {
       cur = { start: words[i].start, end: words[i].end, text: t };
@@ -44,6 +44,33 @@ function agruparPorPontuacao(words, maxChars) {
       }
     }
     if (fechaEm.test(t)) { out.push(cur); cur = null; } // quebra após pontuação
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+// Reagrupa palavras em legendas ultra-curtas (1 a 3 palavras max), ignorando
+// sentenças longas. Feito especificamente para imitar o estilo CapCut/TikTok.
+function agruparEstiloCapCut(words, maxWords) {
+  maxWords = maxWords || 2; // Default to 2 words per chunk for ultra dynamic feel
+  var out = [], cur = null, wordCount = 0;
+  for (var i = 0; i < words.length; i++) {
+    var t = (words[i].text || words[i].word || '').replace(/^\s+|\s+$/g, '');
+    if (!t) continue;
+    if (cur === null) {
+      cur = { start: words[i].start, end: words[i].end, text: t };
+      wordCount = 1;
+    } else {
+      cur.text += ' ' + t;
+      cur.end = words[i].end;
+      wordCount++;
+    }
+    // Quebra se atingiu o máximo de palavras
+    if (wordCount >= maxWords) {
+      out.push(cur);
+      cur = null;
+      wordCount = 0;
+    }
   }
   if (cur) out.push(cur);
   return out;
@@ -144,74 +171,6 @@ function snapToFrames(caps, fps, leadSec) {
 // Monta o texto SRT de UM corte.
 // segmentos: [{inicio, fim}] em SEGUNDOS da timeline original, na ordem do corte.
 // captionSegs: [{start, end, text}] em SEGUNDOS da timeline original (ordenados).
-function buildCutSrt(segmentos, captionSegs) {
-  const lines = [];
-  let idx = 1;
-
-  // 1. Criar um mapeamento da timeline original para a timeline do corte
-  const cutTimelineMap = []; // [{ originalStart, originalEnd, cutStart, cutEnd }]
-  let currentCutOffset = 0;
-  for (const seg of segmentos) {
-    const s = parseFloat(seg.inicio);
-    const e = parseFloat(seg.fim);
-    if (isNaN(s) || isNaN(e) || e <= s) continue;
-    cutTimelineMap.push({ originalStart: s, originalEnd: e, cutStart: currentCutOffset, cutEnd: currentCutOffset + (e - s) });
-    currentCutOffset += (e - s);
-  }
-
-  // 2. Processar cada legenda original
-  for (const cap of captionSegs) {
-    const originalCapStart = cap.start;
-    const originalCapEnd = cap.end;
-    const txt = (cap.text || '').trim();
-    if (!txt) continue;
-
-    const rebasedCaptionParts = [];
-
-    // Encontrar todas as partes da legenda original que caem nos segmentos do corte
-    for (const mapEntry of cutTimelineMap) {
-      const intersectionStartOriginal = Math.max(originalCapStart, mapEntry.originalStart);
-      const intersectionEndOriginal = Math.min(originalCapEnd, mapEntry.originalEnd);
-
-      if (intersectionEndOriginal > intersectionStartOriginal) {
-        // Há uma interseção. Calcular o tempo re-baseado para esta parte da legenda.
-        const localStart = mapEntry.cutStart + (intersectionStartOriginal - mapEntry.originalStart);
-        const localEnd = mapEntry.cutStart + (intersectionEndOriginal - mapEntry.originalStart);
-        rebasedCaptionParts.push({ start: localStart, end: localEnd, text: txt });
-      }
-    }
-
-    // 3. Consolidar as partes re-baseadas em entradas SRT, respeitando gaps
-    if (rebasedCaptionParts.length > 0) {
-      // Ordenar as partes para garantir processamento correto
-      rebasedCaptionParts.sort((a, b) => a.start - b.start);
-
-      let currentSrtEntryStart = rebasedCaptionParts[0].start;
-      let currentSrtEntryEnd = rebasedCaptionParts[0].end;
-
-      for (let i = 1; i < rebasedCaptionParts.length; i++) {
-        const part = rebasedCaptionParts[i];
-        // Se a parte atual é contígua ou muito próxima da anterior, estender a entrada SRT
-        // Definimos um pequeno limiar para considerar contíguo e evitar fragmentação excessiva
-        const CONTIGUITY_THRESHOLD = 0.05; // 50ms
-        if (part.start - currentSrtEntryEnd <= CONTIGUITY_THRESHOLD) {
-          currentSrtEntryEnd = part.end; // Estender o fim
-        } else {
-          // Se há um gap significativo, finalizar a entrada atual e começar uma nova
-          lines.push(idx + '\n' + formatSrtTime(currentSrtEntryStart) + ' --> ' + formatSrtTime(currentSrtEntryEnd) + '\n' + txt + '\n');
-          idx++;
-          currentSrtEntryStart = part.start;
-          currentSrtEntryEnd = part.end;
-        }
-      }
-      // Adicionar a última entrada SRT
-      lines.push(idx + '\n' + formatSrtTime(currentSrtEntryStart) + ' --> ' + formatSrtTime(currentSrtEntryEnd) + '\n' + txt + '\n');
-      idx++;
-    }
-  }
-  return lines.join('\n');
-}
-
 function buildCutSrt(segmentos, captionSegs) {
   const lines = [];
   let idx = 1;
@@ -340,4 +299,16 @@ function parseSrtContent(content) {
   return caps;
 }
 
-module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, snapToFrames, parseSrtContent, mergeShortCaptions, capitalizeCaptions };
+// Gera uma string SRT completa a partir de um array de cards [{index,start,end,text}].
+// Usado pelo Editor CapCut para exportar o .srt após edição manual.
+function gerarSrtTexto(cards) {
+  var out = [];
+  for (var i = 0; i < cards.length; i++) {
+    var c = cards[i];
+    var idx = c.index || (i + 1);
+    out.push(idx + '\n' + formatSrtTime(c.start) + ' --> ' + formatSrtTime(c.end) + '\n' + (c.text || '').trim() + '\n');
+  }
+  return out.join('\n');
+}
+
+module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, agruparEstiloCapCut, snapToFrames, parseSrtContent, mergeShortCaptions, capitalizeCaptions, gerarSrtTexto };

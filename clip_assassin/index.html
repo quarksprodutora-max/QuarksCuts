@@ -1,764 +1,2196 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <meta charset="utf-8">
-    <title>Quarks Cuts</title>
-    <style>
-        :root{
-            --bg:#0f0f12; --card:#17171c; --card2:#1d1d24; --line:#2a2a33;
-            --txt:#e7e7ea; --muted:#9a9aa5; --accent:#8b5cf6; --accent2:#f59e0b;
-            --green:#22c55e; --danger:#ef4444;
-        }
-        *{ box-sizing:border-box; }
-        body{ margin:0; padding:16px; background:var(--bg); color:var(--txt);
-            font-family:'Segoe UI',Arial,sans-serif; font-size:13px; }
-        .header{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
-        .logo-wrap{ width:54px; height:54px; border-radius:14px; flex-shrink:0;
-            background:linear-gradient(135deg,#8b5cf6,#6d28d9);
-            display:flex; align-items:center; justify-content:center;
-            box-shadow:0 4px 14px rgba(139,92,246,.35); }
-        .logo-wrap img{ width:40px; height:40px; object-fit:contain; }
-        .title{ font-size:20px; font-weight:800; letter-spacing:.5px; margin:0;
-            background:linear-gradient(90deg,#fff,#c4b5fd); -webkit-background-clip:text;
-            -webkit-text-fill-color:transparent; }
-        .tagline{ color:var(--muted); font-size:11px; margin-top:2px; }
-        .card{ background:var(--card); border:1px solid var(--line); border-radius:12px;
-            padding:14px; margin:12px 0; }
-        .card h3{ margin:0 0 4px; font-size:14px; display:flex; align-items:center; gap:7px; }
-        .card .hint{ color:var(--muted); font-size:11px; line-height:1.5; margin-bottom:10px; }
-        .accent-gen{ border-top:3px solid var(--accent2); }
-        .accent-json{ border-top:3px solid var(--accent); }
-        .accent-unnest{ border-top:3px solid var(--green); }
-        label.lbl{ display:block; font-size:11px; color:var(--muted); margin:0 0 4px; }
-        select,input[type=number],input[type=text]{ width:100%; background:var(--card2);
-            color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px;
-            font-size:13px; }
-        .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
-        .grid-3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px; }
-        .src-row{ display:flex; gap:8px; align-items:flex-end; margin-bottom:10px; }
-        .src-row > div{ flex:1; }
-        .chk{ display:flex; align-items:center; gap:8px; margin:4px 0 12px; color:var(--muted);
-            font-size:12px; cursor:pointer; }
-        .chk input{ width:16px; height:16px; accent-color:var(--accent2); }
-        button{ border:none; border-radius:9px; font-size:13px; font-weight:700;
-            cursor:pointer; padding:10px 16px; color:#fff; }
-        button:hover{ filter:brightness(1.1); }
-        button:disabled{ opacity:.5; cursor:default; filter:none; }
-        .btn-block{ width:100%; }
-        .btn-gen{ background:linear-gradient(90deg,var(--accent2),#d97706); color:#1a1a1a; }
-        .btn-json{ background:var(--accent); }
-        .btn-unnest{ background:var(--green); }
-        .btn-ghost{ background:var(--card2); border:1px solid var(--line); color:var(--txt);
-            padding:8px 12px; }
-        #status{ padding:11px 12px; background:var(--card2); border-radius:9px; min-height:38px;
-            border-left:3px solid var(--line); font-size:12px; line-height:1.5; word-break:break-word; }
-        #status.success{ border-left-color:var(--green); color:#bbf7d0; }
-        #status.error{ border-left-color:var(--danger); color:#fecaca; }
-        #status.info{ border-left-color:var(--accent); color:var(--muted); }
-        code{ background:var(--card2); padding:1px 5px; border-radius:5px; font-size:11px; }
-    </style>
+<meta charset="utf-8">
+<title>Quarks Cuts</title>
+<style>
+  :root {
+    --bg:#09090e; --surface:#111118; --card:#16161f; --card2:#1c1c28;
+    --line:#252535; --line2:#2e2e42; --txt:#e8e8f0; --muted:#888899;
+    --dimmed:#555566; --accent:#7c3aed; --accent-l:#a78bfa;
+    --amber:#f59e0b; --amber-l:#fcd34d; --pink:#ec4899; --rose:#f43f5e;
+    --sky:#38bdf8; --teal:#2dd4bf; --green:#22c55e; --red:#ef4444;
+    --r:10px; --r-sm:7px;
+    --shadow:0 4px 24px rgba(0,0,0,.5);
+    --glow-v:0 0 20px rgba(124,58,237,.2);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html{overflow-x:hidden;}
+  body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5;padding:12px;min-height:100vh;}
+  ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px;}
+
+  .header{display:flex;align-items:center;gap:11px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);}
+  .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#5b21b6);display:flex;align-items:center;justify-content:center;box-shadow:var(--glow-v);flex-shrink:0;overflow:hidden;}
+  .logo img{width:32px;height:32px;object-fit:contain;}
+  .header-text .title{font-size:16px;font-weight:800;letter-spacing:.4px;background:linear-gradient(90deg,#fff 0%,#c4b5fd 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .header-text .tagline{color:var(--muted);font-size:10px;margin-top:1px;}
+
+  /* --- SISTEMA DE ABAS (TABS) --- */
+  .tabs-nav{display:flex;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:3px;gap:3px;margin-bottom:12px;}
+  .tab-btn{flex:1;background:transparent;color:var(--muted);border:none;border-radius:var(--r-sm);padding:8px 4px;font-size:11.5px;font-weight:700;cursor:pointer;transition:all .15s ease;display:flex;align-items:center;justify-content:center;gap:4px;}
+  .tab-btn:hover{color:var(--txt);background:var(--card2);transform:none;filter:none;}
+  .tab-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 10px rgba(124,58,237,.35);}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;animation:tabFade .15s ease-out;}
+  @keyframes tabFade{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:translateY(0);}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px;margin-bottom:10px;transition:border-color .2s;}
+  .card:hover{border-color:var(--line2);}
+  .card-accent-v{border-top:2.5px solid var(--accent);}
+  .card-accent-a{border-top:2.5px solid var(--amber);}
+  .card-accent-p{border-top:2.5px solid var(--pink);}
+  .card-accent-s{border-top:2.5px solid var(--sky);}
+  .card-accent-g{border-top:2.5px solid var(--green);}
+  .card-accent-cfg{border-top:2.5px solid #64748b;}
+
+  .card-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:6px;color:var(--txt);}
+  .card-hint{color:var(--muted);font-size:11px;line-height:1.55;margin-bottom:10px;}
+  .card-hint b{color:var(--txt);}
+  .card-hint code,.hint-footer code{background:var(--card2);padding:1px 5px;border-radius:4px;font-size:10.5px;color:var(--accent-l);}
+
+  label.lbl{display:block;font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;}
+  select,input[type=number],input[type=text],input[type=password]{width:100%;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-size:12.5px;outline:none;transition:border-color .15s,box-shadow .15s;appearance:none;}
+  select:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,58,237,.18);}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:28px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px;}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:9px;}
+
+  button{border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;padding:9px 14px;color:#fff;transition:filter .15s,transform .1s,opacity .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;letter-spacing:.1px;}
+  button:hover:not(:disabled){filter:brightness(1.12);transform:translateY(-1px);}
+  button:active:not(:disabled){transform:translateY(0);filter:brightness(.95);}
+  button:disabled{opacity:.45;cursor:default;transform:none;filter:none;}
+  .btn-block{width:100%;}
+  .btn-ghost{background:var(--card2);border:1px solid var(--line);color:var(--muted);font-weight:600;}
+  .btn-ghost:hover:not(:disabled){color:var(--txt);border-color:var(--line2);}
+  .btn-amber{background:linear-gradient(90deg,var(--amber),#d97706);color:#1a0a00;}
+  .btn-violet{background:linear-gradient(90deg,var(--accent),#5b21b6);}
+  .btn-pink{background:linear-gradient(90deg,var(--pink),#db2777);}
+  .btn-rose{background:linear-gradient(90deg,var(--rose),#e11d48);}
+  .btn-sky{background:var(--sky);color:#042e45;}
+  .btn-sky2{background:#0ea5e9;}
+  .btn-green{background:var(--green);color:#052e16;}
+  .btn-teal{background:var(--teal);color:#022c27;}
+
+  .flex-row{display:flex;gap:8px;align-items:flex-end;}
+  .flex-row>*{flex:1;}
+  .flex-row .shrink{flex:0 0 auto;}
+  .mt-6{margin-top:6px;}
+  .mt-8{margin-top:8px;}
+
+  #status{padding:10px 12px;background:var(--card2);border-radius:var(--r-sm);border-left:3px solid var(--line);font-size:11.5px;line-height:1.55;word-break:break-word;min-height:36px;transition:border-color .2s,color .2s;}
+  #status.info{border-left-color:var(--accent);color:var(--muted);animation:pulse 2.5s ease-in-out infinite;}
+  #status.success{border-left-color:var(--green);color:#bbf7d0;animation:none;}
+  #status.error{border-left-color:var(--red);color:#fecaca;animation:none;}
+
+  .badge{display:inline-block;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;vertical-align:middle;}
+  .badge-a{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--amber-l);}
+  .badge-p{background:rgba(236,72,153,.12);border:1px solid rgba(236,72,153,.3);color:var(--pink);}
+  .badge-g{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:var(--green);}
+  .badge-v{background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);color:#c084fc;}
+  .btn-seg{display:flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--card2);margin-bottom:8px;}
+  .btn-seg-item{flex:1;background:transparent;border:none;border-radius:0;color:var(--muted);font-size:11.5px;font-weight:600;padding:7px 8px;cursor:pointer;transition:background .15s,color .15s;text-align:center;}
+  .btn-seg-item:hover{color:#fff;background:rgba(255,255,255,.05);}
+  .btn-seg-item.active{background:var(--accent);color:#fff;font-weight:700;}
+  .range-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:2px;}
+  .range-val{font-weight:700;color:var(--amber-l);}
+  input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer;margin-bottom:8px;}
+
+  .hint-footer{font-size:10.5px;color:var(--dimmed);line-height:1.5;margin-top:8px;}
+
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;flex-direction:column;padding:12px;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:var(--surface);border:1px solid var(--line2);border-radius:12px;display:flex;flex-direction:column;height:100%;overflow:hidden;box-shadow:var(--shadow);}
+  .modal-header{padding:11px 14px;background:var(--card);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+  .modal-header h3{margin:0;font-size:14px;}
+  .modal-close{background:transparent;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px;transition:color .15s;}
+  .modal-close:hover{color:var(--txt);transform:none;filter:none;}
+  .modal-toolbar{padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:0;}
+  .modal-body{flex:1;overflow-y:auto;padding:10px;font-size:13px;color:#cbd5e1;}
+  .modal-footer{padding:9px 12px;background:var(--card);border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+
+  .qc-t-row{padding:7px 10px;margin-bottom:4px;background:var(--card2);border-radius:5px;cursor:pointer;user-select:none;border:1px solid var(--line);transition:background .12s,border-color .12s;}
+  .qc-t-row:hover{border-color:var(--line2);}
+  .qc-t-row.sel{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4);color:#fff;}
+
+  .sub-card{background:var(--card2);padding:8px 10px;border-radius:6px;border:1px solid var(--line);display:flex;flex-direction:column;gap:5px;}
+  .sub-card-time{color:var(--sky);font-size:10.5px;font-weight:700;display:flex;justify-content:space-between;}
+  .sub-card input{background:var(--surface);border:1px solid var(--line2);border-radius:4px;padding:6px 8px;font-size:12.5px;color:#fff;outline:none;transition:border-color .12s;}
+  .sub-card input:focus{border-color:var(--sky);}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+</style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo-wrap">
-            <img src="./Icone%20Quarks%20Podcast%20Branco.png" alt="Quarks">
+
+<div class="header">
+  <div class="logo"><img src="./Icone%20Quarks%20Podcast%20Branco.png" alt="Quarks"></div>
+  <div class="header-text">
+    <div class="title">QUARKS CUTS</div>
+    <div class="tagline">Os cortes da IA, direto na timeline do Premiere.</div>
+  </div>
+</div>
+
+<!-- BARRA DE CONFIGURAÇÕES GLOBAIS (SEMPRE VISÍVEIS) -->
+<div class="card card-accent-v" style="padding:10px 12px;margin-bottom:10px;">
+  <div class="grid" style="margin-bottom:6px;">
+    <div>
+      <label class="lbl">Fonte (clipe / sequência)</label>
+      <div class="flex-row" style="align-items:flex-start;margin-bottom:0;">
+        <select id="qcSource" style="margin-bottom:0;"></select>
+        <button id="qcRefreshBtn" class="btn-ghost shrink" title="Atualizar lista" style="padding:8px 10px;">🔄</button>
+      </div>
+    </div>
+    <div>
+      <label class="lbl">Qualidade Whisper (Transcrição)</label>
+      <select id="qcQuality">
+        <option value="">Padrão (small)</option>
+        <option value="ggml-small.bin">Rápida (small)</option>
+        <option value="ggml-medium.bin">Média (medium)</option>
+        <option value="ggml-large-v3.bin">Alta (large)</option>
+        <option value="fw:large-v3">Máxima (faster-whisper)</option>
+      </select>
+    </div>
+  </div>
+  <div>
+    <label class="lbl">Formato do quadro</label>
+    <select id="qcAspect">
+      <option value="9x16">9:16 (vertical - Reels / TikTok / Shorts)</option>
+      <option value="16x9">16:9 (horizontal - YouTube tradicional)</option>
+      <option value="">Igual à fonte original</option>
+    </select>
+  </div>
+</div>
+
+<!-- NAVEGAÇÃO DE ABAS -->
+<div class="tabs-nav">
+  <button class="tab-btn active" data-tab="tab-cortes">✂️ Cortes</button>
+  <button class="tab-btn" data-tab="tab-podcast">🎙️ Podcast</button>
+  <button class="tab-btn" data-tab="tab-legendas">📝 Legendas</button>
+  <button class="tab-btn" data-tab="tab-acabamentos">⚡ Acabamentos</button>
+  <button class="tab-btn" data-tab="tab-config">⚙️ Ajustes</button>
+</div>
+
+<!-- ==================== ABA 1: CORTES ==================== -->
+<div id="tab-cortes" class="tab-content active">
+  <div class="card card-accent-a">
+    <div class="card-title">⚡ Gerar cortes virais <span class="badge badge-a">Whisper + Gemini</span></div>
+    <div class="card-hint">O painel extrai o áudio da fonte, transcreve com Whisper e o Gemini escolhe os cortes no padrão de alta retenção — cada um vira uma sequência.</div>
+    <div class="grid" style="margin-bottom:8px;">
+      <div>
+        <label class="lbl">Qtd. de cortes</label>
+        <input type="number" id="qcQtd" min="1" max="40" placeholder="auto (sugerido)">
+      </div>
+      <div>
+        <label class="lbl">Duração (segundos)</label>
+        <div class="flex-row" style="align-items:flex-start;margin-bottom:0;">
+          <input type="number" id="qcMin" min="5" placeholder="mín" value="20">
+          <input type="number" id="qcMax" min="10" placeholder="máx" value="90">
         </div>
-        <div>
-            <div class="title">QUARKS CUTS</div>
-            <div class="tagline">Os cortes da IA, direto na timeline.</div>
+      </div>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Tom / Estilo dos cortes</label>
+      <select id="qcTom">
+        <option value="variado">Variado (Misturar estilos)</option>
+        <option value="humor">Humorístico (Piadas &amp; Reações)</option>
+        <option value="educativo">Educativo (Insights &amp; Dicas)</option>
+        <option value="polemico">Polêmico (Opiniões &amp; Debates)</option>
+        <option value="emocional">Emocional (Histórias &amp; Motivação)</option>
+        <option value="custom">Outros (Instrução manual)</option>
+      </select>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Ritmo da Montagem</label>
+      <select id="qcModoMontagem">
+        <option value="jumpcuts" selected>✂️ Montagem Dinâmica (2 a 8 partes com Gancho Inicial — Viral)</option>
+        <option value="linear">📼 Take Contínuo (Trecho linear único com contexto completo)</option>
+      </select>
+    </div>
+    <div id="qcCustomPromptWrap" style="display:none;margin-bottom:9px;">
+      <label class="lbl">Instrução personalizada para a IA</label>
+      <input type="text" id="qcCustomPrompt" placeholder="Ex: Foque em dicas de investimento ou quebras de crença...">
+    </div>
+    <button id="qcGenBtn" class="btn-amber btn-block">⚡ Gerar cortes da sequência ativa</button>
+  </div>
+
+  <div class="card card-accent-v">
+    <div class="card-title">📂 Carregar clips.json</div>
+    <div class="card-hint">Já tem o <code>clips.json</code> gerado previamente? Carregue direto — cada corte vira uma sequência montada na timeline.</div>
+    <button id="qcLoadBtn" class="btn-violet btn-block">📂 Carregar clips.json</button>
+  </div>
+</div>
+
+<!-- ==================== ABA 2: PODCAST COMPLETO ==================== -->
+<div id="tab-podcast" class="tab-content">
+  <div class="card card-accent-p">
+    <div class="card-title">&#x2702; Remontagem &amp; Dossiê de Marketing <span class="badge badge-p">Episódio</span></div>
+    <div class="card-hint">Remonta o episódio em 2 passadas: elimina pausas/divagações e estrutura a narrativa com o Hook selecionado. Salva automaticamente o <code>dossie_marketing.md</code> com matéria Forbes, títulos mobile-first e capítulos na timeline!</div>
+    <div class="grid" style="margin-bottom:9px;">
+      <div>
+        <label class="lbl">Meta de duração (min)</label>
+        <input type="number" id="qcPodcastMeta" min="10" max="360" value="120">
+      </div>
+      <div>
+        <label class="lbl">Estilo do Hook Teaser</label>
+        <select id="qcPodcastHook">
+          <option value="diary">Diary of a CEO (Curiosity Gap)</option>
+          <option value="jj">Joel Jota (Tensão Viral &amp; Ápice)</option>
+          <option value="padrao">Padrão (Destaque do episódio)</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex-row" style="margin-bottom:0;">
+      <button id="qcHookApenasBtn" class="btn-rose btn-block">🔥 Gerar Apenas o Hook</button>
+      <button id="qcPodcastBtn" class="btn-pink btn-block">🎬 Remontar Episódio Completo</button>
+    </div>
+  </div>
+
+  <div class="card card-accent-g">
+    <div class="card-title">🪹 Desaninhar (Unnest)</div>
+    <div class="card-hint">Abra a sequência na timeline e clique. Cada sequência aninhada (nest) é desfeita e os clipes originais retornam na mesma posição exata na timeline ativa.</div>
+    <button id="qcUnnestBtn" class="btn-green btn-block">🪹 Desaninhar a sequência ativa</button>
+  </div>
+</div>
+
+<!-- ==================== ABA 3: LEGENDAS & TRANSCRIÇÃO ==================== -->
+<div id="tab-legendas" class="tab-content">
+  <div class="card card-accent-g">
+    <div class="card-title">📝 Editores Interativos</div>
+    <div class="card-hint">Edite transcrições ou legendas na tela: marque falas com <b>Shift + Clique</b> para criar cortes manuais ou edite legendas no <b>estilo CapCut</b> (Enter quebra / Backspace une).</div>
+    <div class="flex-row">
+      <button id="qcOpenTranscriptEditorBtn" class="btn-green btn-block">📝 Editor de Transcrição</button>
+      <button id="qcOpenSubEditorBtn" class="btn-teal btn-block">💬 Legendas CapCut</button>
+    </div>
+  </div>
+
+  <div class="card card-accent-s">
+    <div class="card-title">💬 Gerar Legenda do Corte</div>
+    <div class="card-hint">Abra o <b>corte</b> (sequência) na timeline. Transcreve, corrige pontuação e gera <code>.srt</code>, gráficos MOGRT ou <b>legendas animadas estilo SupoClip</b>.</div>
+    <div class="grid" style="margin-bottom:9px;">
+      <div>
+        <label class="lbl">Idioma da legenda</label>
+        <select id="qcLegIdioma">
+          <option value="">Original (corrigida)</option>
+          <option value="pt">Português (traduzida)</option>
+          <option value="en">Inglês</option>
+          <option value="es">Espanhol</option>
+          <option value="fr">Francês</option>
+          <option value="it">Italiano</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">Estilo da Legenda Animada</label>
+        <select id="qcSupoClipStyleSelect">
+          <option value="hormozi" selected>🟢 Hormozi (Pílula Verde + Pop)</option>
+          <option value="mrbeast">🟡 MrBeast (Amarelo Bold + Red)</option>
+          <option value="tiktok">🟣 TikTok (Rosa Neon + Pop)</option>
+          <option value="podcast">🎙️ Podcast Clean (Dourado)</option>
+          <option value="minimal">⚪ Minimalista (Branco)</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex-row" style="margin-bottom:0;">
+      <button id="qcLegendaAnimadaBtn" class="btn-amber btn-block">✨ Gerar Legenda Animada (Trilha V2)</button>
+      <button id="qcLegendaBtn" class="btn-sky btn-block">💬 Gerar .SRT</button>
+    </div>
+    <button id="qcLegendaTimelineBtn" class="btn-teal btn-block mt-6">🎬 Inserir .SRT na Timeline Ativa (00:00:00:00 com .prtextstyle)</button>
+    <button id="qcMogrtBtn" class="btn-sky2 btn-block mt-6">🎨 Legenda estilizada — MOGRT na timeline</button>
+    <button id="qcMogrtSrtBtn" class="btn-ghost btn-block mt-6">🎨 MOGRTs a partir de um .srt ajustado...</button>
+    <div class="hint-footer mt-8">
+      ✨ <b>Legenda Animada SupoClip:</b> Renderiza em ~2 segundos com canal alpha (ProRes 4444) e insere direto na trilha <b>V2</b> da timeline!
+    </div>
+  </div>
+
+  <div class="card card-accent-v">
+    <div class="card-title">📦 Legendas em Lote por Compartimento <span class="badge badge-a">Batch SRT & Timeline</span></div>
+    <div class="card-hint">Gera e insere automaticamente as legendas <code>.srt</code> de <b>todos os cortes e sequências</b> dentro de uma pasta (compartimento) do Premiere, aplicando seu estilo <code>.prtextstyle</code> em timecode padrão <code>00:00:00:00</code>!</div>
+    
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Compartimento (Pasta do Projeto)</label>
+      <div class="flex-row" style="margin-bottom:0;">
+        <select id="qcBinSelect" style="flex:1;">
+          <option value="cortes">📁 cortes (Padrão)</option>
+        </select>
+        <button id="qcRefreshBinsBtn" class="btn-ghost shrink" title="Atualizar lista de compartimentos" style="padding:8px 10px;">🔄</button>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-bottom:8px;">
+      <div>
+        <label class="lbl">Filtrar por tipo</label>
+        <select id="qcBatchItemType">
+          <option value="seq" selected>Apenas Sequências (Cortes)</option>
+          <option value="all">Todos os Itens (Cortes, Sequências e Clipes)</option>
+          <option value="clip">Apenas Arquivos de Vídeo</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">Ação das Legendas</label>
+        <select id="qcBatchMogrtOption">
+          <option value="timeline_style" selected>⚡ Inserir na Timeline + .prtextstyle (00:00:00:00)</option>
+          <option value="srt_only">Apenas gerar e importar .SRT para a bin</option>
+          <option value="with_mogrt">Inserir MOGRT Animado na timeline</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Estilo de Legenda (.prtextstyle)</label>
+      <div class="flex-row" style="margin-bottom:0;">
+        <input type="text" id="qcBatchTextStylePath" value="C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\quarks_cuts\presets\Quarks Podcast.prtextstyle" style="flex:1;font-size:11px;" placeholder="Caminho do arquivo .prtextstyle">
+        <button id="qcBrowseTextStyleBtn" class="btn-ghost shrink" title="Localizar arquivo .prtextstyle" style="padding:8px 10px;">📁</button>
+      </div>
+    </div>
+
+    <div class="flex-row" style="margin-bottom:0;gap:8px;">
+      <button id="qcBatchApplyExistingSrtBtn" class="btn-teal btn-block" style="flex:1;font-weight:600;" title="Pega os .SRT já gerados na pasta legendas/ e insere direto em todas as sequências com o estilo no timecode padrão">🎬 Inserir .SRT existentes nas Timelines</button>
+      <button id="qcBatchLegendasBtn" class="btn-violet btn-block" style="flex:1;">⚡ Gerar e Inserir Legendas (Novo Lote)</button>
+    </div>
+
+    <div class="hint-footer mt-8">
+      💾 <b>Modo Timeline + .prtextstyle:</b> Adiciona a faixa de legenda nativa a cada sequência com timecode inicial <code>00:00:00:00</code> e importa o estilo <b>Quarks Podcast.prtextstyle</b> para o projeto.
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ABA 4: ACABAMENTOS (RESPIROS & J-CUT) ==================== -->
+<div id="tab-acabamentos" class="tab-content">
+  <!-- FLUXO VISUAL RECOMENDADO -->
+  <div class="card card-accent-v" style="background:rgba(124,58,237,0.08);border-color:rgba(124,58,237,0.3);margin-bottom:10px;">
+    <div style="font-weight:700;color:#c084fc;font-size:12px;margin-bottom:4px;">📌 FLUXO IDEAL DE ACABAMENTO (PÓS-CORTE)</div>
+    <div style="font-size:11.5px;color:#cbd5e1;line-height:1.4;">
+      1️⃣ <b>Passo 1: Remover Respiros</b> &mdash; elimina silêncios e pausas mortas na timeline ativa.<br>
+      2️⃣ <b>Passo 2: Gerar J-Cut</b> &mdash; sobrepõe suavemente o áudio dos cortes para um diálogo natural.<br>
+      <span style="color:#fbbf24;font-size:10.5px;">⚠️ <i>Regra de ouro: Sempre remova os respiros ANTES de aplicar o J-Cut!</i></span>
+    </div>
+  </div>
+
+  <!-- STATUS DA TIMELINE ATIVA -->
+  <div class="flex-row" style="margin-bottom:10px;background:var(--card2);padding:7px 10px;border-radius:6px;border:1px solid var(--line);align-items:center;">
+    <div style="flex:1;font-size:11.5px;">
+      <span style="color:var(--muted);">Sequência Ativa:</span> <b id="qcAcSeqName" style="color:#38bdf8;">Clique em Atualizar</b>
+    </div>
+    <button id="qcAcRefreshSeqBtn" class="btn-ghost shrink" title="Atualizar informações da timeline" style="padding:4px 8px;font-size:11px;">🔄 Atualizar</button>
+  </div>
+
+  <!-- CARD 1: REMOVER RESPIROS -->
+  <div class="card card-accent-a">
+    <div class="card-title">💨 1. Remover Respiros &amp; Silêncios <span class="badge badge-a">Auto Silence</span></div>
+    <div class="card-hint">Analisa o áudio da timeline, detecta trechos sem fala e apaga as lacunas (ripple delete) para acelerar o ritmo.</div>
+
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Faixa de Áudio de Referência</label>
+      <select id="qcAcTrackSelect">
+        <option value="0">A1 (Faixa 1)</option>
+        <option value="-1">Mix Geral (Todas as faixas)</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Predefinições de Ritmo</label>
+      <div class="btn-seg" role="group">
+        <button type="button" id="qcPresetNatural" class="btn-seg-item">Natural</button>
+        <button type="button" id="qcPresetRitmado" class="btn-seg-item active">Ritmado</button>
+        <button type="button" id="qcPresetRapido" class="btn-seg-item">Rápido</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="range-row">
+        <span>Nível de Silêncio (Threshold)</span>
+        <span id="qcAcThresholdVal" class="range-val">-30 dB</span>
+      </div>
+      <input type="range" id="qcAcThreshold" min="-60" max="0" step="1" value="-30">
+    </div>
+
+    <div class="grid" style="margin-bottom:4px;">
+      <div>
+        <div class="range-row">
+          <span>Duração Mínima</span>
+          <span id="qcAcMinDurVal" class="range-val">400 ms</span>
         </div>
-    </div>
-
-    <!-- Opções globais de saída -->
-    <div class="card">
-        <h3>⚙️ Saída dos cortes</h3>
-        <div class="grid">
-            <div>
-                <label class="lbl">Formato do quadro</label>
-                <select id="qcAspect">
-                    <option value="9x16">9:16 (vertical)</option>
-                    <option value="16x9">16:9 (horizontal)</option>
-                    <option value="">Igual à fonte</option>
-                </select>
-            </div>
-            <div>
-                <label class="lbl">Fonte (clipe 🎬 / sequência 🎞️)</label>
-                <div style="display:flex; gap:6px;">
-                    <select id="qcSource" style="flex:1;"></select>
-                    <button id="qcRefreshBtn" class="btn-ghost" title="Atualizar lista" style="flex:0 0 auto;">🔄</button>
-                </div>
-            </div>
+        <input type="range" id="qcAcMinDur" min="100" max="2000" step="20" value="400">
+      </div>
+      <div>
+        <div class="range-row">
+          <span>Suavidade (Padding)</span>
+          <span id="qcAcPaddingVal" class="range-val">100 ms</span>
         </div>
-        <div style="display:flex; justify-content:flex-end; margin-top:2px;">
-            <button id="qcClearCacheBtn" class="btn-ghost" title="Apaga o áudio e as transcrições já processados (todas as sequências)" style="padding:6px 10px; font-size:11px;">🧹 Limpar cache</button>
-        </div>
+        <input type="range" id="qcAcPadding" min="0" max="300" step="10" value="100">
+      </div>
     </div>
 
-    <!-- Gerar cortes (Whisper + Gemini) -->
-    <div class="card accent-gen">
-        <h3>⚡ Gerar cortes (Whisper + Gemini)</h3>
-        <div class="hint">Abra a <b>sequência</b> na timeline. O painel exporta o áudio, transcreve offline com Whisper e o Gemini escolhe os cortes — cada um vira uma sequência.</div>
-        <div class="grid-3">
-            <div>
-                <label class="lbl">Qualidade</label>
-                <select id="qcQuality">
-                    <option value="">Padrão</option>
-                    <option value="ggml-small.bin">Rápida (small)</option>
-                    <option value="ggml-medium.bin">Média (medium)</option>
-                    <option value="ggml-large-v3.bin">Alta (large)</option>
-                    <option value="fw:large-v3">Máxima (faster-whisper) — melhor sincronia</option>
-                </select>
-            </div>
-            <div>
-                <label class="lbl">Qtd. cortes</label>
-                <input type="number" id="qcQtd" min="1" max="40" placeholder="auto">
-            </div>
-            <div>
-                <label class="lbl">Duração (s)</label>
-                <div style="display:flex; gap:6px;">
-                    <input type="number" id="qcMin" min="5" placeholder="mín" value="20">
-                    <input type="number" id="qcMax" min="10" placeholder="máx" value="90">
-                </div>
-            </div>
-        </div>
-        <button id="qcGenBtn" class="btn-gen btn-block">⚡ Gerar cortes da sequência ativa</button>
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Comportamento do corte</label>
+      <select id="qcAcModeSelect">
+        <option value="ripple" selected>Cortar e apagar as lacunas (Ripple Delete - Recomendado)</option>
+        <option value="lift">Cortar e apagar deixando espaços (Lift)</option>
+        <option value="razor">Apenas fatiar os cortes sem apagar (Razor)</option>
+      </select>
     </div>
 
-    <!-- Carregar clips.json -->
-    <div class="card accent-json">
-        <h3>📂 Carregar clips.json</h3>
-        <div class="hint">Já tem o <code>clips.json</code> do VoxFlow? Escolha a Fonte acima e carregue — cada corte vira uma sequência, na ordem certa.</div>
-        <button id="qcLoadBtn" class="btn-json btn-block">📂 Carregar clips.json</button>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txt);margin-bottom:10px;cursor:pointer;">
+      <input type="checkbox" id="qcAcBackupSilenceCheck" checked style="accent-color:var(--accent);">
+      Fazer backup da sequência antes de cortar
+    </label>
+
+    <button id="qcAcRunSilenceBtn" class="btn-amber btn-block">⚡ Analisar e Remover Respiros</button>
+    <button id="qcAcUndoSilenceBtn" class="btn-ghost btn-block" style="display:none;color:#f87171;border-color:rgba(248,113,113,0.3);margin-top:6px;">↩️ Desfazer Remoção de Respiros</button>
+
+    <div id="qcAcSilenceSummary" style="display:none;font-size:11.5px;padding:8px 10px;background:rgba(245,158,11,0.1);border-radius:5px;border:1px solid rgba(245,158,11,0.25);color:#fbbf24;margin-top:8px;"></div>
+  </div>
+
+  <!-- CARD 2: J-CUT AUTOMÁTICO -->
+  <div class="card card-accent-v">
+    <div class="card-title">🎬 2. J-Cut Automático <span class="badge badge-v">Auto J-Cut</span></div>
+    <div class="card-hint">Sobrepõe o áudio do próximo corte sobre o vídeo do corte anterior, tornando as trocas de câmera 10x mais fluidas e profissionais.</div>
+
+    <div style="margin-bottom:8px;">
+      <label class="lbl">Duração da Sobreposição (Frames)</label>
+      <div class="flex-row" style="margin-bottom:6px;">
+        <input type="number" id="qcAcJCutFrames" min="1" max="15" value="4" style="flex:1;">
+        <button type="button" class="btn-ghost qc-quick-frame" data-frames="2" style="padding:6px 10px;font-size:11px;">2 f</button>
+        <button type="button" class="btn-ghost qc-quick-frame active" data-frames="4" style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--accent);border-color:var(--accent);">4 f</button>
+        <button type="button" class="btn-ghost qc-quick-frame" data-frames="6" style="padding:6px 10px;font-size:11px;">6 f</button>
+        <button type="button" class="btn-ghost qc-quick-frame" data-frames="8" style="padding:6px 10px;font-size:11px;">8 f</button>
+      </div>
     </div>
 
-    <!-- Gerar legenda (por corte) -->
-    <div class="card" style="border-top:3px solid #38bdf8;">
-        <h3>💬 Gerar legenda do corte</h3>
-        <div class="hint">Abra o <b>corte</b> (sequência) na timeline e clique. Transcreve só ele, corrige (ou traduz) e gera um <code>.srt</code> com linhas curtas quebradas na pontuação, salvo na pasta <code>legendas</code> e importado na bin.</div>
-        <div style="margin-bottom:10px;">
-            <label class="lbl">Idioma da legenda</label>
-            <select id="qcLegIdioma">
-                <option value="">Original (corrigida)</option>
-                <option value="pt">Português (traduzida)</option>
-                <option value="en">Inglês</option>
-                <option value="es">Espanhol</option>
-                <option value="fr">Francês</option>
-                <option value="it">Italiano</option>
-            </select>
-        </div>
-        <button id="qcLegendaBtn" class="btn-block" style="background:#38bdf8; color:#0b3a4a;">💬 Gerar legenda .srt (arrastar na timeline)</button>
-        <button id="qcMogrtBtn" class="btn-block" style="background:#0ea5e9; color:#fff; margin-top:8px;">🎨 Legenda estilizada — direto na timeline (MOGRT)</button>
-        <button id="qcMogrtSrtBtn" class="btn-block btn-ghost" style="margin-top:8px;">🎨 MOGRTs a partir de um .srt ajustado…</button>
-        <div class="hint" style="margin-top:8px; margin-bottom:0;">🎨 usa o seu modelo <code>.mogrt</code> (padrão do podcast): exporte o gráfico de legenda no Essential Graphics uma vez; o painel pede o arquivo no 1º uso.<br>Ajustou a legenda na timeline? Exporte-a (painel <b>Texto → Legendas → … → Exportar para arquivo SRT</b>) e use o botão de cima com o arquivo — os gráficos saem nos seus tempos corrigidos.</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txt);margin-bottom:10px;cursor:pointer;">
+      <input type="checkbox" id="qcAcBackupJCutCheck" checked style="accent-color:var(--accent);">
+      Fazer backup da sequência antes de aplicar J-Cut
+    </label>
+
+    <button id="qcAcRunJCutBtn" class="btn-violet btn-block">🎬 Aplicar J-Cut nos Cortes</button>
+    <button id="qcAcUndoJCutBtn" class="btn-ghost btn-block" style="display:none;color:#f87171;border-color:rgba(248,113,113,0.3);margin-top:6px;">↩️ Desfazer J-Cuts</button>
+
+    <div id="qcAcJCutSummary" style="display:none;font-size:11.5px;padding:8px 10px;background:rgba(124,58,237,0.1);border-radius:5px;border:1px solid rgba(124,58,237,0.25);color:#c084fc;margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- ==================== ABA 5: CONFIGURAÇÕES ==================== -->
+<div id="tab-config" class="tab-content">
+  <div class="card card-accent-cfg">
+    <div class="card-title">⚙️ Inteligência Artificial (Gemini)</div>
+    <div class="card-hint">Configure a chave de API e o modelo de IA. As alterações são salvas com segurança no seu usuário do Windows.</div>
+    <div style="margin-bottom:9px;">
+      <label class="lbl">Chave Gemini API</label>
+      <div class="flex-row" style="align-items:flex-start;margin-bottom:0;">
+        <input type="password" id="qcApiKeyInput" placeholder="Cole sua chave AIzaSy... ou AQ...">
+        <button id="qcToggleKeyVisBtn" class="btn-ghost shrink" style="padding:8px 10px;" title="Mostrar/Ocultar chave">👁️</button>
+      </div>
     </div>
-
-    <!-- Desaninhar -->
-    <div class="card accent-unnest">
-        <h3>🪺 Desaninhar (unnest)</h3>
-        <div class="hint">Abra a sequência na timeline e clique. Cada sequência aninhada vira os clipes originais, na mesma posição. (Efeitos no próprio nest se perdem; desce 1 nível.)</div>
-        <button id="qcUnnestBtn" class="btn-unnest btn-block">🪺 Desaninhar a sequência ativa</button>
+    <div style="margin-bottom:9px;">
+      <label class="lbl">Modelo de IA (Gemini)</label>
+      <select id="qcModelSelect">
+        <option value="gemini-3.6-flash" selected>gemini-3.6-flash (Padrão — Alta velocidade e 1M contexto)</option>
+        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Ultra leve / Econômico)</option>
+        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+        <option value="gemini-2.5-pro">gemini-2.5-pro (Raciocínio Profundo / Máxima Precisão)</option>
+        <option value="gemini-2.0-flash">gemini-2.0-flash (Ultra rápido)</option>
+        <option value="gemini-1.5-pro">gemini-1.5-pro (Janela de 2M tokens)</option>
+        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+        <option value="custom">✏️ Outro modelo (Digitar manualmente)</option>
+      </select>
+      <div id="qcCustomModelWrap" style="display:none;margin-top:6px;">
+        <input type="text" id="qcCustomModelInput" placeholder="Ex: gemini-3.6-flash ou gemini-3.0-flash">
+      </div>
     </div>
+    <button id="qcSaveSettingsBtn" class="btn-green btn-block">💾 Salvar Configurações</button>
+  </div>
 
-    <div class="card">
-        <h3>📡 Status</h3>
-        <div id="status" class="info">Pronto. Abra a sequência e gere os cortes.</div>
+  <div class="card card-accent-cfg">
+    <div class="card-title">⚡ Desempenho &amp; Preset de Áudio</div>
+    <div class="card-hint">Escolha o preset de exportação do áudio da timeline para acelerar o processo e poupar espaço em disco.</div>
+    <div style="margin-bottom:9px;">
+      <label class="lbl">Preset do Media Encoder (.epr)</label>
+      <select id="qcPresetSelect">
+        <option value="presets/Waveform_Audio_16kHz_Mono.epr">⚡ WAV 16 kHz Mono (Leve e Rápido - 90% menor, sem perda)</option>
+        <option value="presets/Waveform_Audio_48kHz_16-bit.epr">🐢 WAV 48 kHz Estéreo 16-bit (Padrão Antigo - Pesado)</option>
+      </select>
     </div>
+    <button id="qcSavePresetBtn" class="btn-ghost btn-block">💾 Definir Preset de Áudio</button>
+  </div>
 
-    <script type="text/javascript" src="./CSInterface.js"></script>
-    <script type="text/javascript">
-        var csInterface = new CSInterface();
+  <div class="card card-accent-cfg">
+    <div class="card-title">🧹 Armazenamento &amp; Cache</div>
+    <div class="card-hint">Os áudios e transcrições temporárias ficam guardados no cache local para reaproveitamento instantâneo.</div>
+    <button id="qcClearCacheBtn" class="btn-ghost btn-block">🧹 Limpar Cache do Quarks Cuts</button>
+  </div>
+</div>
 
-        // Logger em arquivo (%APPDATA%\QuarksCuts\panel.log) — carregado sob demanda;
-        // se o Node não estiver disponível, vira no-op silencioso.
-        var qcFileLog = null;
-        function qcPanelLog(msg) {
-            try {
-                if (qcFileLog === null && typeof require !== 'undefined') {
-                    var er = csInterface.getSystemPath(SystemPath.EXTENSION);
-                    qcFileLog = require(er + '/engine/log.js');
-                }
-                if (qcFileLog) qcFileLog.qcLog('painel', msg);
-            } catch (e) { qcFileLog = false; }
+<!-- BARRA DE STATUS FIXA (SEMPRE VISÍVEL) -->
+<div class="card" style="margin-bottom:0;">
+  <div class="card-title" style="margin-bottom:7px;">📡 Status</div>
+  <div id="status" class="info">Pronto. Abra a sequência e escolha a ação desejada nas abas acima.</div>
+</div>
+
+<script type="text/javascript" src="./CSInterface.js"></script>
+<script type="text/javascript" src="./audio-analysis.js"></script>
+<script type="text/javascript">
+var csInterface = new CSInterface();
+var qcFileLog = null;
+function qcPanelLog(msg) {
+  try {
+    if (qcFileLog === null && typeof require !== 'undefined') {
+      var er = csInterface.getSystemPath(SystemPath.EXTENSION);
+      qcFileLog = require(er + '/engine/log.js');
+    }
+    if (qcFileLog) qcFileLog.qcLog('painel', msg);
+  } catch (e) { qcFileLog = false; }
+}
+
+/* --- CONTROLE DE ABAS --- */
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
+    this.classList.add('active');
+    var target = document.getElementById(this.dataset.tab);
+    if (target) target.classList.add('active');
+    if (this.dataset.tab === 'tab-legendas') qcRefreshBins();
+    if (this.dataset.tab === 'tab-acabamentos') qcRefreshAcabamentosContext();
+  });
+});
+
+var qcBusy = false;
+var QC_BOTOES = ['qcRefreshBtn','qcLoadBtn','qcGenBtn','qcLegendaBtn','qcLegendaTimelineBtn','qcLegendaAnimadaBtn','qcBatchLegendasBtn','qcBatchApplyExistingSrtBtn','qcBrowseTextStyleBtn','qcRefreshBinsBtn','qcMogrtBtn','qcMogrtSrtBtn','qcUnnestBtn','qcPodcastBtn','qcHookApenasBtn','qcAcRunSilenceBtn','qcAcRunJCutBtn','qcAcRefreshSeqBtn'];
+function qcSetBusy(b) {
+  qcBusy = b;
+  for (var i = 0; i < QC_BOTOES.length; i++) { var el = document.getElementById(QC_BOTOES[i]); if (el) el.disabled = b; }
+}
+function qcComecar() {
+  if (qcBusy) { qcPanelLog('clique ignorado: processo em andamento'); return false; }
+  qcSetBusy(true); return true;
+}
+function showStatus(msg, type) {
+  var el = document.getElementById('status');
+  if (type === 'error') msg += '  (detalhes: %APPDATA%\\QuarksCuts\\panel.log)';
+  el.textContent = msg; el.className = type;
+  qcPanelLog((type === 'error' ? 'ERRO: ' : '') + msg);
+  if (type === 'success' || type === 'error' || msg.indexOf('Cancelado') === 0) qcSetBusy(false);
+}
+function parseSrtSeconds(s) {
+  if (!s) return 0;
+  s = String(s).replace('.', ',');
+  var parts = s.split(','), hms = parts[0].split(':'), ms = parts[1] ? parseInt(parts[1], 10) : 0;
+  var h = 0, mi = 0, se = 0;
+  if (hms.length === 3) { h = +hms[0]; mi = +hms[1]; se = +hms[2]; }
+  else if (hms.length === 2) { mi = +hms[0]; se = +hms[1]; }
+  else { se = +hms[0]; }
+  return h * 3600 + mi * 60 + se + (ms || 0) / 1000;
+}
+function qcToSeconds(v) { return (typeof v === 'number') ? v : parseSrtSeconds(v); }
+function qcEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+function qcCutName(num, totalSec, title) {
+  var nn = (num < 10 ? '0' + num : '' + num);
+  var t = String(title || ('Corte ' + num)).replace(/[^\w \-\xC0-\xFF]/g, '').substring(0, 60);
+  return nn + ' |' + Math.round(totalSec) + 's|- ' + t;
+}
+function qcClipDuration(clip) {
+  var segs = clip.segmentos || [], tot = 0;
+  for (var j = 0; j < segs.length; j++) { var st = qcToSeconds(segs[j].inicio), en = qcToSeconds(segs[j].fim); if (en > st) tot += (en - st); }
+  return tot;
+}
+function qcHms(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  return p2(h) + ':' + p2(m) + ':' + p2(s);
+}
+function qcSanitizeFile(name) { return String(name).replace(/[<>:"/\\|?*]+/g, '').replace(/\s+/g, ' ').trim().substring(0, 80); }
+
+function qcRefreshSources() {
+  csInterface.evalScript('qcListSources()', function(result) {
+    var sel = document.getElementById('qcSource'); sel.innerHTML = '';
+    if (!result || result.indexOf('ERROR') === 0 || result.length === 0) {
+      var o = document.createElement('option'); o.value = ''; o.textContent = '(nenhuma fonte — importe um video/sequencia)'; sel.appendChild(o); return;
+    }
+    var lines = result.split('\n'), activeIdx = '';
+    for (var i = 0; i < lines.length; i++) {
+      var parts = lines[i].split('|'); if (parts.length < 4) continue;
+      var idx = parts[0], type = parts[1], active = parts[2], nm = parts.slice(3).join('|');
+      var o = document.createElement('option'); o.value = idx; o.textContent = (type === 'seq' ? '\u{1F39E}\uFE0F ' : '\u{1F3AC} ') + nm; sel.appendChild(o);
+      if (active === '1') activeIdx = idx;
+    }
+    if (activeIdx !== '') sel.value = activeIdx;
+  });
+}
+function qcBuildNext(clips, idx, okCount, errs, srcIdx, aspect, onDone) {
+  if (idx >= clips.length) {
+    if (errs.length === 0) showStatus('\u2714 ' + okCount + ' sequencia(s) criada(s) na bin "cortes".', 'success');
+    else showStatus('Concluido: ' + okCount + ' ok, ' + errs.length + ' com erro. ' + errs.join(' | '), 'error');
+    if (onDone) onDone(okCount, errs); return;
+  }
+  var clip = clips[idx], segs = clip.segmentos || [], parts = [], totalSec = 0;
+  for (var i = 0; i < segs.length; i++) {
+    var st = qcToSeconds(segs[i].inicio), en = qcToSeconds(segs[i].fim);
+    if (en > st) { parts.push(st.toFixed(3) + ':' + en.toFixed(3)); totalSec += (en - st); }
+  }
+  if (parts.length === 0) { qcBuildNext(clips, idx + 1, okCount, errs, srcIdx, aspect, onDone); return; }
+  var num = idx + 1, seqName = qcCutName(num, totalSec, clip.titulo), rangesStr = parts.join(',');
+  showStatus('\u{1F3AC} (' + num + '/' + clips.length + ') ' + seqName + '...', 'info');
+  csInterface.evalScript('quarksCutsBuild("' + qcEscape(seqName) + '","' + rangesStr + '","' + srcIdx + '","' + (aspect || '') + '")', function(result) {
+    var ok = okCount, e2 = errs.slice();
+    if (result && result.indexOf('SUCCESS:') === 0) ok++; else e2.push(result);
+    qcBuildNext(clips, idx + 1, ok, e2, srcIdx, aspect, onDone);
+  });
+}
+
+function qcGetUserConfigPath(eng) {
+  var appData = process.env.LOCALAPPDATA || eng.os.tmpdir();
+  var userDir = eng.pathMod.join(appData, 'QuarksCuts');
+  if (!eng.fs.existsSync(userDir)) eng.fs.mkdirSync(userDir, { recursive: true });
+  return eng.pathMod.join(userDir, 'config.json');
+}
+
+function qcLoadEngine() {
+  if (typeof require === 'undefined') { showStatus('\u26A0\uFE0F Node nao esta habilitado. Reinstale a extensao.', 'error'); return null; }
+  try {
+    var fs = require('fs'), pathMod = require('path'), os = require('os');
+    var extRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
+    var gem = require(extRoot + '/engine/gemini-cortes.js');
+    var tr = require(extRoot + '/engine/transcribe.js');
+    var cfgPath = extRoot + '/engine/config.json';
+    var baseCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    
+    // Suporte prioritário ao config do usuário em LocalAppData
+    var userCfgPath = qcGetUserConfigPath({ fs: fs, pathMod: pathMod, os: os });
+    if (fs.existsSync(userCfgPath)) {
+      try {
+        var userCfg = JSON.parse(fs.readFileSync(userCfgPath, 'utf8'));
+        baseCfg = Object.assign({}, baseCfg, userCfg);
+      } catch (e1) {}
+    }
+
+    var saMod = null;
+    try {
+      saMod = require(extRoot + '/engine/supoclip-animator.js');
+    } catch (e2) {
+      try { saMod = require(pathMod.join(extRoot, 'supoclip-animator.js')); } catch (e3) {}
+    }
+
+    return { fs: fs, pathMod: pathMod, os: os, extRoot: extRoot, cfgPath: cfgPath,
+      userCfgPath: userCfgPath, cfg: baseCfg, transcribe: tr.transcribe,
+      resolveModelPath: tr.resolveModelPath, gerarCortes: gem.gerarCortes,
+      gerarPodcastEditado: gem.gerarPodcastEditado, gerarHookApenas: gem.gerarHookApenas,
+      classificarClipsPorZona: gem.classificarClipsPorZona, extractChapters: gem.extractChapters,
+      corrigirLegendas: gem.corrigirLegendas, corrigirPalavras: gem.corrigirPalavras,
+      srtMod: require(extRoot + '/engine/srt.js'),
+      supoClip: saMod };
+  } catch (e) { showStatus('\u26A0\uFE0F Falha ao carregar motor/config: ' + (e.message || e), 'error'); return null; }
+}
+
+function qcSaveUserConfig(eng, newObj) {
+  var userCfg = Object.assign({}, eng.cfg, newObj);
+  try {
+    eng.fs.writeFileSync(eng.userCfgPath, JSON.stringify(userCfg, null, 2), 'utf8');
+    eng.cfg = userCfg;
+    return true;
+  } catch (e) {
+    showStatus('Erro ao salvar config: ' + e.message, 'error');
+    return false;
+  }
+}
+
+function qcResolvePreset(eng) {
+  var preset = eng.cfg.audio_export_preset || '';
+  if (preset && !eng.pathMod.isAbsolute(preset)) preset = eng.pathMod.join(eng.extRoot, preset);
+  if (preset && eng.fs.existsSync(preset)) return preset;
+
+  // Tenta primeiro o preset leve 16kHz Mono
+  var light = eng.pathMod.join(eng.extRoot, 'presets', 'Waveform_Audio_16kHz_Mono.epr');
+  if (eng.fs.existsSync(light)) return light;
+
+  // Fallback para os presets padrão
+  var builtins = [
+    'presets/Waveform_Audio_48kHz_16-bit.epr',
+    'presets\\Waveform_Audio_48kHz_16-bit.epr',
+    'presets/Waveform Audio 48kHz 16-bit.epr'
+  ];
+  for (var bi = 0; bi < builtins.length; bi++) {
+    var bp = eng.pathMod.join(eng.extRoot, builtins[bi]);
+    if (eng.fs.existsSync(bp)) return bp;
+  }
+
+  showStatus('\u26A0\uFE0F Preset de audio padrao nao encontrado.', 'error');
+  return null;
+}
+
+function qcCacheRoot(eng) {
+  var base = process.env.LOCALAPPDATA || eng.os.tmpdir();
+  var root = eng.pathMod.join(base, 'QuarksCuts', 'cache');
+  if (!eng.fs.existsSync(root)) eng.fs.mkdirSync(root, { recursive: true });
+  return root;
+}
+function qcFindCacheFolder(eng, cacheRoot, activeFolder) {
+  if (!activeFolder || !eng.fs.existsSync(cacheRoot)) return null;
+  var exact = eng.pathMod.join(cacheRoot, activeFolder);
+  if (eng.fs.existsSync(exact)) return exact;
+  if (activeFolder.indexOf('__') !== -1) {
+    var prefix = activeFolder.split('__')[0] + '__', folders = eng.fs.readdirSync(cacheRoot);
+    for (var i = 0; i < folders.length; i++) { if (folders[i].indexOf(prefix) === 0) return eng.pathMod.join(cacheRoot, folders[i]); }
+  }
+  return null;
+}
+function qcRmrf(fs, pathMod, p) {
+  if (!fs.existsSync(p)) return;
+  var st = fs.statSync(p);
+  if (st.isDirectory()) { fs.readdirSync(p).forEach(function(name) { qcRmrf(fs, pathMod, pathMod.join(p, name)); }); fs.rmdirSync(p); }
+  else { fs.unlinkSync(p); }
+}
+function qcDirSize(fs, pathMod, p) {
+  if (!fs.existsSync(p)) return 0;
+  var st = fs.statSync(p);
+  if (!st.isDirectory()) return st.size;
+  var total = 0; fs.readdirSync(p).forEach(function(name) { total += qcDirSize(fs, pathMod, pathMod.join(p, name)); }); return total;
+}
+
+function qcExportAndTranscribe(eng, preset, modelSel) {
+  return new Promise(function(resolve, reject) {
+    csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
+      if (!keyRes || keyRes.indexOf('OK:') !== 0) { reject(new Error(keyRes || 'Nao achei a sequencia ativa.')); return; }
+      var activeFolder = keyRes.substring(3), cacheRoot = qcCacheRoot(eng);
+      var foundDir = qcFindCacheFolder(eng, cacheRoot, activeFolder);
+      var cacheDir = foundDir ? foundDir : eng.pathMod.join(cacheRoot, activeFolder);
+      if (!eng.fs.existsSync(cacheDir)) eng.fs.mkdirSync(cacheDir, { recursive: true });
+      var modelPath = eng.resolveModelPath(modelSel);
+      var modelBase = modelPath ? eng.pathMod.basename(modelPath).replace(/\.bin$/i, '') : 'default';
+      var transcriptFile = eng.pathMod.join(cacheDir, 'transcript-' + modelBase + '.json');
+      var audioFile = eng.pathMod.join(cacheDir, 'audio.wav');
+      if (eng.fs.existsSync(transcriptFile)) {
+        try { var cachedSegs = JSON.parse(eng.fs.readFileSync(transcriptFile, 'utf8')); showStatus('\u267B\uFE0F Reaproveitando transcricao ja feita (cache).', 'info'); resolve({ segments: cachedSegs, language: 'auto' }); return; }
+        catch (e) {}
+      }
+      function transcreverDe(mediaPath) {
+        showStatus('\u{1F3A4} Transcrevendo... (Whisper offline em andamento)', 'info');
+        eng.transcribe(mediaPath, { onProgress: function(m) { showStatus('\u{1F3A4} ' + m, 'info'); }, model: modelSel || undefined })
+          .then(function(res) { try { eng.fs.writeFileSync(transcriptFile, JSON.stringify(res.segments)); } catch (e) {} resolve(res); }).catch(reject);
+      }
+      if (eng.fs.existsSync(audioFile)) { showStatus('\u267B\uFE0F Reaproveitando audio ja exportado (cache).', 'info'); transcreverDe(audioFile); return; }
+      showStatus('\u{1F39A}\uFE0F Exportando o audio da sequencia ativa...', 'info');
+      csInterface.evalScript('qcExportActiveAudio("' + qcEscape(preset) + '","' + qcEscape(audioFile) + '")', function(expRes) {
+        if (!expRes || expRes.indexOf('OK:') !== 0) { reject(new Error(expRes || 'Falha ao exportar o audio.')); return; }
+        transcreverDe(expRes.substring(3));
+      });
+    });
+  });
+}
+
+document.getElementById('qcRefreshBtn').addEventListener('click', function() { qcRefreshSources(); showStatus('Lista de fontes atualizada.', 'info'); });
+document.getElementById('qcClearCacheBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  try {
+    var root = qcCacheRoot(eng), freed = qcDirSize(eng.fs, eng.pathMod, root);
+    qcRmrf(eng.fs, eng.pathMod, root);
+    var tmp = eng.os.tmpdir(), orphaned = eng.fs.readdirSync(tmp).filter(function(n) { return /^qc-.*\.wav$/i.test(n); });
+    orphaned.forEach(function(n) { var fp = eng.pathMod.join(tmp, n); try { freed += eng.fs.statSync(fp).size; eng.fs.unlinkSync(fp); } catch (e) {} });
+    showStatus('\u{1F9F9} Cache limpo — ' + Math.round(freed / 1024 / 1024) + ' MB liberados.', 'success');
+  } catch (e) { showStatus('\u26A0\uFE0F Erro ao limpar cache: ' + (e.message || e), 'error'); }
+});
+
+document.getElementById('qcLoadBtn').addEventListener('click', function() {
+  if (!qcComecar()) return;
+  var srcIdx = document.getElementById('qcSource').value;
+  if (srcIdx === '' || srcIdx === null) { showStatus('\u26A0\uFE0F Escolha a Fonte primeiro.', 'error'); return; }
+  showStatus('\u{1F4C2} Selecione o clips.json...', 'info');
+  var dlg; try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o clips.json', '', ['json']); } catch (e) { showStatus('\u26A0\uFE0F Nao foi possivel abrir o seletor: ' + e, 'error'); return; }
+  if (!dlg || !dlg.data || dlg.data.length === 0) { showStatus('Cancelado.', 'info'); return; }
+  var fr = window.cep.fs.readFile(dlg.data[0]);
+  if (fr.err !== 0) { showStatus('\u26A0\uFE0F Erro ao ler o arquivo (cod ' + fr.err + ')', 'error'); return; }
+  var manifest; try { manifest = JSON.parse(fr.data); } catch (e) { showStatus('\u26A0\uFE0F clips.json invalido: ' + e, 'error'); return; }
+  var clips = manifest.clips || []; if (!clips.length) { showStatus('\u26A0\uFE0F Nenhum corte no arquivo.', 'error'); return; }
+  qcBuildNext(clips, 0, 0, [], srcIdx, document.getElementById('qcAspect').value);
+});
+
+var qcTomEl = document.getElementById('qcTom');
+if (qcTomEl) qcTomEl.addEventListener('change', function() { var w = document.getElementById('qcCustomPromptWrap'); if (w) w.style.display = (this.value === 'custom') ? 'block' : 'none'; });
+
+document.getElementById('qcGenBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
+  var aspect = document.getElementById('qcAspect').value, modelSel = document.getElementById('qcQuality').value;
+  var qtd = parseInt(document.getElementById('qcQtd').value, 10), minD = parseInt(document.getElementById('qcMin').value, 10), maxD = parseInt(document.getElementById('qcMax').value, 10);
+  var tomVal = document.getElementById('qcTom') ? document.getElementById('qcTom').value : '';
+  var modoVal = document.getElementById('qcModoMontagem') ? document.getElementById('qcModoMontagem').value : 'jumpcuts';
+  var customVal = document.getElementById('qcCustomPrompt') ? document.getElementById('qcCustomPrompt').value : '';
+  var opts = { quantidade: isNaN(qtd) ? 0 : qtd, minDur: isNaN(minD) ? 0 : minD, maxDur: isNaN(maxD) ? 0 : maxD, tom: tomVal, modoMontagem: modoVal, instrucaoCustom: customVal, onProgress: function(m) { showStatus('\u{1F504} ' + m, 'info'); } };
+  qcExportAndTranscribe(eng, preset, modelSel)
+    .then(function(res) { showStatus('\u{1F504} Pensando nos melhores cortes (Gemini)...', 'info'); return eng.gerarCortes(res.segments, opts); })
+    .then(function(out) {
+      var clips = out.clips || []; if (!clips.length) { showStatus('\u26A0\uFE0F Nenhum corte sugerido.', 'error'); return; }
+      qcWriteViralReport(eng, clips); if (out.promo) qcWritePromoReport(eng, out.promo);
+      csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
+        if (!idxRes || idxRes.indexOf('OK:') !== 0) { showStatus(idxRes || '\u26A0\uFE0F Nao achei a sequencia ativa.', 'error'); return; }
+        qcBuildNext(clips, 0, 0, [], idxRes.substring(3), aspect);
+      });
+    }).catch(function(e) { showStatus('\u26A0\uFE0F ' + (e && e.message ? e.message : e), 'error'); });
+});
+
+document.getElementById('qcHookApenasBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
+  var hookStyle = document.getElementById('qcPodcastHook').value, modelSel = document.getElementById('qcQuality').value;
+  qcExportAndTranscribe(eng, preset, modelSel)
+    .then(function(res) { showStatus('\u{1F525} Pensando no Hook (Gemini)...', 'info'); return eng.gerarHookApenas(res.segments, { hookStyle: hookStyle }); })
+    .then(function(out) {
+      var segs = out.hook_segmentos || []; if (!segs.length) { showStatus('Nenhum segmento gerado.', 'error'); return; }
+      var ranges = []; for (var j = 0; j < segs.length; j++) ranges.push(segs[j].inicio + ':' + segs[j].fim);
+      csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
+        if (!idxRes || idxRes.indexOf('OK:') !== 0) { showStatus(idxRes || 'Nao achei a sequencia ativa.', 'error'); return; }
+        var cmd = 'quarksCutsBuild("' + qcEscape('Hook Gerado - ' + hookStyle) + '", "' + qcEscape(ranges.join(',')) + '", "' + qcEscape(idxRes.substring(3)) + '", "16x9", 0)';
+        csInterface.evalScript(cmd, function(buildRes) {
+          if (buildRes && buildRes.indexOf('SUCCESS:') === 0) showStatus('\u{1F525} Hook gerado com sucesso!', 'success');
+          else showStatus('Erro na montagem: ' + buildRes, 'error');
+        });
+      });
+    }).catch(function(e) { showStatus((e && e.message ? e.message : e), 'error'); });
+});
+
+document.getElementById('qcPodcastBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
+  var alvoMeta = parseInt(document.getElementById('qcPodcastMeta').value, 10), hookStyle = document.getElementById('qcPodcastHook').value, modelSel = document.getElementById('qcQuality').value;
+  var opts = { alvoDuracaoMin: isNaN(alvoMeta) ? 120 : alvoMeta, hookStyle: hookStyle };
+  qcExportAndTranscribe(eng, preset, modelSel)
+    .then(function(res) { showStatus('\u{1F3AC} Pensando na estrutura (Gemini)...', 'info'); return eng.gerarPodcastEditado(res.segments, opts); })
+    .then(function(out) {
+      var blocos = out.podcast_editado || []; if (!blocos.length) { showStatus('Nenhum bloco gerado.', 'error'); return; }
+      if (out.promo) qcWritePromoReport(eng, out.promo);
+      var ranges = [];
+      for (var i = 0; i < blocos.length; i++) { var segs = blocos[i].segmentos || []; for (var j = 0; j < segs.length; j++) ranges.push(segs[j].inicio + ':' + segs[j].fim); }
+      var seqName = 'Episodio Editado (' + opts.alvoDuracaoMin + 'm)';
+      csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
+        if (!idxRes || idxRes.indexOf('OK:') !== 0) { showStatus(idxRes || 'Nao achei a sequencia ativa.', 'error'); return; }
+        var cmd = 'quarksCutsBuild("' + qcEscape(seqName) + '", "' + qcEscape(ranges.join(',')) + '", "' + qcEscape(idxRes.substring(3)) + '", "16x9", 0)';
+        csInterface.evalScript(cmd, function(buildRes) {
+          if (buildRes && buildRes.indexOf('SUCCESS:') === 0) {
+            if (out.chaptersRaw) { csInterface.evalScript('qcAddChapterMarkersToSequence("' + qcEscape(seqName) + '", "' + qcEscape(out.chaptersRaw) + '")', function() { showStatus('\u2714 Remontagem concluida com Capitulos!', 'success'); }); }
+            else showStatus('\u2714 Remontagem concluida!', 'success');
+          } else showStatus('Erro na montagem: ' + buildRes, 'error');
+        });
+      });
+    }).catch(function(e) { showStatus((e && e.message ? e.message : e), 'error'); });
+});
+
+function qcWriteViralReport(eng, clips) {
+  try { if (!clips.length) return;
+    csInterface.evalScript('qcProjectDir()', function(dirRes) {
+      var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+      var L = [
+        '======================================================================',
+        ' RELATORIO DE SHORTS & CORTES VIRAIS — Quarks Cuts (YouTube Agent Skill)',
+        ' Gerado em ' + new Date().toLocaleString(),
+        ' Total de Cortes: ' + clips.length,
+        '======================================================================',
+        ''
+      ];
+      for (var i = 0; i < clips.length; i++) {
+        var c = clips[i], a = c.avaliacao || {}, num = (i + 1 < 10 ? '0' : '') + (i + 1), dur = qcClipDuration(c);
+        var scoreStr = (typeof a.hook_score === 'number') ? a.hook_score + '/100' : (a.hook || 'N/A');
+        var formulaStr = a.formula ? ' [' + a.formula + ']' : '';
+        L.push('----------------------------------------------------------------------');
+        L.push(num + ' — ' + (c.titulo || 'Corte ' + (i + 1)) + '  (' + Math.round(dur) + 's)');
+        L.push('Potencial: ' + (a.potencial_viral || 'N/A') + ' | HookScore: ' + scoreStr + formulaStr);
+        if (a.motivo) L.push('Racional: ' + a.motivo);
+        if (c.hook_text_tela) L.push('TEXTO NA TELA (0-3s): "' + c.hook_text_tela + '" (sem repetir a fala)');
+        if (c.loop_point) L.push('LOOP POINT: ' + c.loop_point);
+        L.push('');
+        L.push('MAPA DE MONTAGEM (JUMP CUTS):');
+        var segs = c.segmentos || [];
+        for (var j = 0; j < segs.length; j++) {
+          var st = qcToSeconds(segs[j].inicio), en = qcToSeconds(segs[j].fim);
+          var rotulo = (j === 0) ? ' (1. HOOK / ENTRADA LIMPA)' : (j === segs.length - 1 ? ' (PAYOFF / PUNCHLINE)' : ' (PARTE ' + (j + 1) + ' - CONTEXTO)');
+          L.push('  Parte ' + (j + 1) + rotulo + ': ' + qcHms(st) + ' -> ' + qcHms(en) + ' (' + (en - st).toFixed(1) + 's)');
         }
+        if (c.dicas_edicao) { L.push(''); L.push('DICAS DE EDICAO: ' + c.dicas_edicao); }
+        L.push('');
+        L.push('LEGENDA & HASHTAGS:');
+        L.push(c.legenda_ig ? c.legenda_ig : '(nao gerada)');
+        L.push('');
+      }
+      try { eng.fs.writeFileSync(eng.pathMod.join(base, 'relatorio-cortes.txt'), L.join('\r\n'), 'utf8'); } catch (e) {}
+    });
+  } catch (e) {}
+}
 
-        // ---------- trava global anti-clique-duplo ----------
-        // Enquanto um processo roda, TODOS os botões ficam desabilitados; a trava
-        // solta sozinha quando o fluxo termina (status de sucesso/erro/cancelado).
-        var qcBusy = false;
-        var QC_BOTOES = ['qcRefreshBtn', 'qcLoadBtn', 'qcGenBtn', 'qcLegendaBtn', 'qcMogrtBtn', 'qcMogrtSrtBtn', 'qcUnnestBtn'];
-        function qcSetBusy(b) {
-            qcBusy = b;
-            for (var i = 0; i < QC_BOTOES.length; i++) {
-                var el = document.getElementById(QC_BOTOES[i]);
-                if (el) el.disabled = b;
+function qcWritePromoReport(eng, promo) {
+  try { if (!promo) return;
+    csInterface.evalScript('qcProjectDir()', function(dirRes) {
+      var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+      try { eng.fs.writeFileSync(eng.pathMod.join(base, 'dossie_marketing.md'), promo, 'utf8'); } catch (e) {}
+      if (eng.extractChapters) {
+        var chRes = eng.extractChapters(promo);
+        if (chRes.text) {
+          try { eng.fs.writeFileSync(eng.pathMod.join(base, 'capitulos_youtube.txt'), chRes.text, 'utf8'); } catch (e) {}
+          if (chRes.markers && chRes.markers.length > 0) {
+            var payload = chRes.markers.map(function(m) { return m.seconds + '|' + qcEscape(m.title); }).join('\n');
+            csInterface.evalScript('qcAddChapterMarkers("' + qcEscape(payload) + '")', function() {});
+          }
+        }
+      }
+    });
+  } catch (e) {}
+}
+
+function qcPreparaLegenda(eng, preset, modelSel, idioma) {
+  return qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
+    var words = res.segments || []; if (!words.length) throw new Error('Sem fala detectada nesta sequencia.');
+    var grupos = eng.srtMod.agruparPorPontuacao(words, 20); if (!grupos.length) throw new Error('Legenda vazia.');
+    showStatus(idioma ? '\u{1F310} Traduzindo a legenda...' : '\u{1F4DD} Corrigindo a legenda...', 'info');
+    return eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined }).then(function(corr) {
+      var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
+      return new Promise(function(resolve) {
+        csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+          var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
+          resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+        });
+      });
+    });
+  });
+}
+
+document.getElementById('qcLegendaBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
+  var modelSel = document.getElementById('qcQuality').value, idioma = document.getElementById('qcLegIdioma').value;
+  qcPreparaLegenda(eng, preset, modelSel, idioma).then(function(caps) {
+    var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], caps);
+    if (!srtStr.trim()) { showStatus('\u26A0\uFE0F Legenda vazia.', 'error'); return; }
+    csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
+      var nome = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'legenda';
+      csInterface.evalScript('qcProjectDir()', function(dirRes) {
+        var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+        var outDir = eng.pathMod.join(base, 'legendas'), sufixo = idioma ? '.' + idioma : '';
+        var file = eng.pathMod.join(outDir, qcSanitizeFile(nome) + sufixo + '.srt');
+        try { if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true }); eng.fs.writeFileSync(file, srtStr, 'utf8'); }
+        catch (e) { showStatus('\u26A0\uFE0F Erro ao salvar o .srt: ' + (e.message || e), 'error'); return; }
+        csInterface.evalScript('qcImportLegendas("' + qcEscape(file) + '")', function(impRes) {
+          var imported = (impRes && impRes.indexOf('SUCCESS:') === 0);
+          showStatus('\u2714 Legenda gerada: ' + file + (imported ? ' (importada na bin "legendas").' : ' (importe manualmente).'), 'success');
+        });
+      });
+    });
+  }).catch(function(e) { showStatus('\u26A0\uFE0F ' + (e && e.message ? e.message : e), 'error'); });
+});
+
+document.getElementById('qcLegendaTimelineBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
+  var modelSel = document.getElementById('qcQuality').value, idioma = document.getElementById('qcLegIdioma').value;
+  var stylePath = document.getElementById('qcBatchTextStylePath') ? document.getElementById('qcBatchTextStylePath').value.trim() : '';
+
+  showStatus('🎤 Transcrevendo corte ativo para a timeline...', 'info');
+  qcPreparaLegenda(eng, preset, modelSel, idioma).then(function(caps) {
+    var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], caps);
+    if (!srtStr.trim()) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
+    csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
+      var nome = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'legenda';
+      csInterface.evalScript('qcProjectDir()', function(dirRes) {
+        var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+        var outDir = eng.pathMod.join(base, 'legendas'), sufixo = idioma ? '.' + idioma : '';
+        var file = eng.pathMod.join(outDir, qcSanitizeFile(nome) + sufixo + '.srt');
+        try { if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true }); eng.fs.writeFileSync(file, srtStr, 'utf8'); }
+        catch (e) { showStatus('⚠️ Erro ao salvar o .srt: ' + (e.message || e), 'error'); return; }
+
+        showStatus('🎬 Inserindo faixa de legenda na timeline ativa (00:00:00:00)...', 'info');
+        csInterface.evalScript('qcAttachSrtToActiveSequence("' + qcEscape(file) + '","' + qcEscape(stylePath) + '")', function(attRes) {
+          if (attRes && attRes.indexOf('OK:') === 0) {
+            showStatus('✔ Legenda inserida na timeline ativa em 00:00:00:00 com estilo Quarks Podcast!', 'success');
+          } else {
+            showStatus('⚠️ ' + (attRes || 'Falha ao inserir na timeline.'), 'error');
+          }
+        });
+      });
+    });
+  }).catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
+});
+
+document.getElementById('qcLegendaAnimadaBtn').addEventListener('click', function() {
+  if (!qcComecar()) return;
+  var eng = qcLoadEngine(); if (!eng) return;
+  var preset = qcResolvePreset(eng); if (!preset) return;
+  var modelSel = document.getElementById('qcQuality').value;
+  var styleKey = document.getElementById('qcSupoClipStyleSelect').value;
+
+  showStatus('\u{1F399}\uFE0F Exportando audio e transcrevendo palavras (Whisper)...', 'info');
+  qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
+    var words = res.segments || [];
+    if (!words.length) throw new Error('Sem fala detectada nesta sequencia.');
+
+    showStatus('\u2728 Gerando legenda animada (' + styleKey + ') com FFmpeg...', 'info');
+    csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+      var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 30;
+      if (isNaN(fps) || fps <= 0) fps = 30;
+
+      csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
+        var seqName = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'corte';
+        csInterface.evalScript('qcProjectDir()', function(dirRes) {
+          var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+          var outDir = eng.pathMod.join(base, 'legendas');
+          try { if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true }); } catch (e) {}
+
+          var cleanName = qcSanitizeFile(seqName);
+          var assFile = eng.pathMod.join(outDir, cleanName + '_' + styleKey + '.ass');
+          var movFile = eng.pathMod.join(outDir, cleanName + '_' + styleKey + '_overlay.mov');
+
+          var maxDur = Math.max.apply(null, words.map(function(w) { return parseFloat(w.end || 0); })) + 1;
+          if (isNaN(maxDur) || maxDur < 2) maxDur = 10;
+
+          var w = 1080, h = 1920;
+          var sa = eng.supoClip;
+          if (!sa) {
+            try { sa = require(eng.pathMod.join(eng.extRoot, 'engine', 'supoclip-animator.js')); } catch (e1) {
+              try { sa = require(eng.pathMod.join(eng.extRoot, 'supoclip-animator.js')); } catch (e2) {}
             }
-        }
-        // Chamar no início de cada handler pesado: retorna false se já ocupado.
-        function qcComecar() {
-            if (qcBusy) { qcPanelLog('clique ignorado: processo em andamento'); return false; }
-            qcSetBusy(true);
-            return true;
-        }
+          }
+          if (!sa) throw new Error('Motor SupoClip Animator nao encontrado.');
 
-        function showStatus(msg, type) {
-            var status = document.getElementById('status');
-            // Em erro, aponta onde está o diário completo (diagnóstico da equipe).
-            if (type === 'error') msg += '  (detalhes: %APPDATA%\\QuarksCuts\\panel.log)';
-            status.textContent = msg;
-            status.className = type;
-            qcPanelLog((type === 'error' ? 'ERRO: ' : '') + msg);
-            // Fim de fluxo (sucesso, erro ou cancelamento) → libera os botões.
-            if (type === 'success' || type === 'error' || msg.indexOf('Cancelado') === 0) qcSetBusy(false);
-        }
+          var assContent = sa.buildAssSubtitles(words, styleKey, w, h);
+          eng.fs.writeFileSync(assFile, assContent, 'utf8');
 
-        // ---------- helpers ----------
-        function parseSrtSeconds(s) {
-            if (!s) return 0;
-            s = String(s).replace('.', ',');
-            var parts = s.split(',');
-            var hms = parts[0].split(':');
-            var ms = parts[1] ? parseInt(parts[1], 10) : 0;
-            var h = 0, mi = 0, se = 0;
-            if (hms.length === 3) { h = +hms[0]; mi = +hms[1]; se = +hms[2]; }
-            else if (hms.length === 2) { mi = +hms[0]; se = +hms[1]; }
-            else { se = +hms[0]; }
-            return h * 3600 + mi * 60 + se + (ms || 0) / 1000;
-        }
-        function qcToSeconds(v) { return (typeof v === 'number') ? v : parseSrtSeconds(v); }
-        function qcEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
-        function qcCutName(num, totalSec, title) {
-            var nn = (num < 10 ? '0' + num : '' + num);
-            var t = String(title || ('Corte ' + num)).replace(/[^\w \-À-ſ]/g, '').substring(0, 60);
-            return nn + ' |' + Math.round(totalSec) + 's|- ' + t;
-        }
-        function qcClipDuration(clip) {
-            var segs = clip.segmentos || [], tot = 0;
-            for (var j = 0; j < segs.length; j++) {
-                var st = qcToSeconds(segs[j].inicio), en = qcToSeconds(segs[j].fim);
-                if (en > st) tot += (en - st);
-            }
-            return tot;
-        }
-
-        function qcRefreshSources() {
-            csInterface.evalScript('qcListSources()', function(result) {
-                var sel = document.getElementById('qcSource');
-                sel.innerHTML = '';
-                if (!result || result.indexOf('ERROR') === 0 || result.length === 0) {
-                    var o = document.createElement('option');
-                    o.value = ''; o.textContent = '(nenhuma fonte — importe um vídeo/sequência)';
-                    sel.appendChild(o);
-                    return;
-                }
-                var lines = result.split('\n');
-                var activeIdx = '';
-                for (var i = 0; i < lines.length; i++) {
-                    var parts = lines[i].split('|');
-                    if (parts.length < 4) continue;
-                    var idx = parts[0], type = parts[1], active = parts[2];
-                    var nm = parts.slice(3).join('|');
-                    var o = document.createElement('option');
-                    o.value = idx;
-                    o.textContent = (type === 'seq' ? '🎞️ ' : '🎬 ') + nm;
-                    sel.appendChild(o);
-                    if (active === '1') activeIdx = idx;
-                }
-                if (activeIdx !== '') sel.value = activeIdx;
+          showStatus('\u{1F3A5} Renderizando overlay transparente ProRes 4444 (' + styleKey + ')...', 'info');
+          sa.renderTransparentMov(assFile, movFile, maxDur, w, h, fps).then(function() {
+            showStatus('\u{1F4E5} Inserindo legenda animada na trilha V2 da timeline...', 'info');
+            csInterface.evalScript('qcImportAndPlaceOverlay("' + qcEscape(movFile) + '")', function(impRes) {
+              if (impRes && impRes.indexOf('SUCCESS:') === 0) {
+                showStatus('\u2714 ' + impRes.substring(9), 'success');
+              } else {
+                showStatus('\u2714 Overlay salvo: ' + movFile + ' (arraste na trilha V2). ' + (impRes || ''), 'success');
+              }
             });
-        }
+          }).catch(function(errRender) {
+            showStatus('\u26A0\uFE0F Erro FFmpeg: ' + (errRender.message || errRender) + ' - Arquivo .ASS gerado em: ' + assFile, 'error');
+          });
+        });
+      });
+    });
+  }).catch(function(e) {
+    showStatus('\u26A0\uFE0F ' + (e && e.message ? e.message : e), 'error');
+  });
+});
 
-        // Monta as sequências dos cortes (recursivo). onDone(okCount, errs) ao fim.
-        function qcBuildNext(clips, idx, okCount, errs, srcIdx, aspect, onDone) {
-            if (idx >= clips.length) {
-                if (errs.length === 0) showStatus('✓ ' + okCount + ' sequência(s) criada(s) na bin "cortes".', 'success');
-                else showStatus('Concluído: ' + okCount + ' ok, ' + errs.length + ' com erro. ' + errs.join(' | '), 'error');
-                if (onDone) onDone(okCount, errs);
+function qcResolveMogrt(eng) {
+  var p = eng.cfg.mogrt_path || '';
+  if (p && !eng.pathMod.isAbsolute(p)) p = eng.pathMod.join(eng.extRoot, p);
+  if (p && eng.fs.existsSync(p)) return p;
+  showStatus('\u{1F4C2} Selecione o modelo .mogrt da legenda...', 'info');
+  var dlg; try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o .mogrt da legenda', '', ['mogrt']); }
+  catch (e) { showStatus('\u26A0\uFE0F Nao foi possivel abrir o seletor: ' + e, 'error'); return null; }
+  if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return null; }
+  p = dlg.data[0];
+  qcSaveUserConfig(eng, { mogrt_path: p });
+  return p;
+}
+
+document.getElementById('qcMogrtBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
+  var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
+  var modelSel = document.getElementById('qcQuality').value, idioma = document.getElementById('qcLegIdioma').value, textParam = eng.cfg.mogrt_text_param || 'Source Text';
+  qcPreparaLegenda(eng, preset, modelSel, idioma).then(function(caps) {
+    showStatus('\u{1F3A8} Inserindo ' + caps.length + ' legenda(s) estilizada(s) na timeline...', 'info');
+    var payload = { mogrt: mogrt, param: textParam, caps: caps.map(function(c) { return { s: c.start, e: c.end, t: c.text }; }) };
+    csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
+      if (res && res.indexOf('SUCCESS:') === 0) showStatus('\u2714 ' + res.substring(9), 'success');
+      else showStatus(res || '\u26A0\uFE0F Falha ao inserir os graficos.', 'error');
+    });
+  }).catch(function(e) { showStatus('\u26A0\uFE0F ' + (e && e.message ? e.message : e), 'error'); });
+});
+
+document.getElementById('qcMogrtSrtBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
+  var textParam = eng.cfg.mogrt_text_param || 'Source Text';
+  showStatus('\u{1F4C2} Selecione o .srt (ajustado) da legenda...', 'info');
+  var dlg; try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o .srt da legenda ajustada', '', ['srt']); }
+  catch (e) { showStatus('\u26A0\uFE0F Nao foi possivel abrir o seletor: ' + e, 'error'); return; }
+  if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return; }
+  var caps; try { caps = eng.srtMod.parseSrtContent(eng.fs.readFileSync(dlg.data[0], 'utf8')); }
+  catch (e) { showStatus('\u26A0\uFE0F Erro ao ler o .srt: ' + (e.message || e), 'error'); return; }
+  if (!caps.length) { showStatus('\u26A0\uFE0F Nenhuma legenda valida no arquivo.', 'error'); return; }
+  csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+    var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
+    if (fps > 0) caps = eng.srtMod.snapToFrames(caps, fps);
+    showStatus('\u{1F3A8} Inserindo ' + caps.length + ' legenda(s) na timeline...', 'info');
+    var payload = { mogrt: mogrt, param: textParam, caps: caps.map(function(c) { return { s: c.start, e: c.end, t: c.text }; }) };
+    csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
+      if (res && res.indexOf('SUCCESS:') === 0) showStatus('\u2714 ' + res.substring(9), 'success');
+      else showStatus(res || '\u26A0\uFE0F Falha ao inserir os graficos.', 'error');
+    });
+  });
+});
+
+/* --- LEGENDA EM LOTE POR COMPARTIMENTO (BIN) --- */
+function qcRefreshBins() {
+  csInterface.evalScript('qcListBins()', function(res) {
+    var sel = document.getElementById('qcBinSelect');
+    if (!sel) return;
+    sel.innerHTML = '';
+    var list = [];
+    try {
+      if (res && res.indexOf('OK:') === 0) {
+        var jsonStr = res.substring(3);
+        if (jsonStr.indexOf('[') === 0) {
+          list = JSON.parse(jsonStr);
+        } else {
+          var lines = jsonStr.split('\n');
+          for (var i = 0; i < lines.length; i++) {
+            var p = lines[i].split('|');
+            if (p[0]) list.push({ name: p[0], path: p[1] || p[0], nodeId: p[2] || p[0] });
+          }
+        }
+      }
+    } catch (e) {}
+
+    var foundCortes = false;
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var opt = document.createElement('option');
+      opt.value = item.nodeId || item.name;
+      opt.dataset.binName = item.name;
+      opt.textContent = '📁 ' + (item.path || item.name);
+      if (item.name.toLowerCase() === 'cortes') { opt.selected = true; foundCortes = true; }
+      sel.appendChild(opt);
+    }
+    if (!sel.options.length) {
+      var optDefault = document.createElement('option');
+      optDefault.value = 'cortes';
+      optDefault.dataset.binName = 'cortes';
+      optDefault.textContent = '📁 cortes (Padrão)';
+      sel.appendChild(optDefault);
+    }
+  });
+}
+
+var qcRefreshBinsBtn = document.getElementById('qcRefreshBinsBtn');
+if (qcRefreshBinsBtn) {
+  qcRefreshBinsBtn.addEventListener('click', function() {
+    qcRefreshBins();
+    showStatus('Lista de compartimentos atualizada.', 'info');
+  });
+}
+
+// Localiza o arquivo .srt correspondente a um item (por nome sanitizado, prefixo EDITADO XX ou correspondencia aproximada)
+function qcFindMatchingSrt(item, outDir, fs, pathMod) {
+  if (!fs.existsSync(outDir)) return null;
+  var safeName = qcSanitizeFile(item.name || '');
+
+  // 1. Match exato pelo safeName
+  var directFile = pathMod.join(outDir, safeName + '.srt');
+  if (fs.existsSync(directFile)) return directFile;
+
+  // 2. Busca nos arquivos do diretorio legendas/
+  var files = [];
+  try { files = fs.readdirSync(outDir); } catch (e) { return null; }
+
+  // 2a. Match por prefixo (ex: EDITADO 03 ou EDITADO 3)
+  var matchEdit = (item.name || '').match(/^(EDITADO\s*\d+)/i);
+  var prefix = matchEdit ? matchEdit[1].toUpperCase().replace(/\s+/, ' ') : '';
+  if (prefix) {
+    for (var f = 0; f < files.length; f++) {
+      var fn = files[f];
+      if (fn.toLowerCase().endsWith('.srt')) {
+        var fnNorm = fn.toUpperCase().replace(/\s+/, ' ');
+        if (fnNorm.indexOf(prefix) === 0) {
+          return pathMod.join(outDir, fn);
+        }
+      }
+    }
+  }
+
+  // 2b. Match por safeName parcial
+  var cleanTarget = safeName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (file.toLowerCase().endsWith('.srt')) {
+      var cleanFile = file.toLowerCase().replace(/\.srt$/, '').replace(/[^a-z0-9]/g, '');
+      if (cleanTarget && cleanFile && (cleanTarget.indexOf(cleanFile) !== -1 || cleanFile.indexOf(cleanTarget) !== -1)) {
+        return pathMod.join(outDir, file);
+      }
+    }
+  }
+
+  return null;
+}
+
+// Botao de selecao de arquivo .prtextstyle via CEP
+var qcBrowseTextStyleBtn = document.getElementById('qcBrowseTextStyleBtn');
+if (qcBrowseTextStyleBtn) {
+  qcBrowseTextStyleBtn.addEventListener('click', function() {
+    try {
+      var dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o arquivo .prtextstyle', '', ['prtextstyle']);
+      if (dlg && dlg.data && dlg.data.length > 0) {
+        document.getElementById('qcBatchTextStylePath').value = dlg.data[0];
+        showStatus('Estilo selecionado: ' + dlg.data[0], 'info');
+      }
+    } catch (e) {
+      showStatus('Nao foi possivel abrir o seletor: ' + e, 'error');
+    }
+  });
+}
+
+function qcProcessBatchItem(eng, preset, modelSel, idioma, item, cacheRoot, outDir, batchAction, textStylePath) {
+  return new Promise(function(resolve) {
+    var safeName = qcSanitizeFile(item.name || 'item');
+    var srtFile = eng.pathMod.join(outDir, safeName + (idioma ? '.' + idioma : '') + '.srt');
+
+    function transcreverEMontarSrt(mediaPath, isSequence) {
+      showStatus('🎤 [' + item.name + '] Transcrevendo com Whisper...', 'info');
+      eng.transcribe(mediaPath, {
+        onProgress: function(m) { showStatus('🎤 [' + item.name + '] ' + m, 'info'); },
+        model: modelSel || undefined
+      }).then(function(res) {
+        var words = res.segments || [];
+        if (!words.length) { resolve({ ok: false, error: 'Sem fala detectada' }); return; }
+        var grupos = eng.srtMod.agruparPorPontuacao(words, 20);
+        if (!grupos.length) { resolve({ ok: false, error: 'Transcrição vazia' }); return; }
+
+        eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined })
+          .then(function(corr) {
+            var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
+
+            function finalizarSrt(capsFinal) {
+              var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], capsFinal);
+              if (!srtStr.trim()) { resolve({ ok: false, error: 'SRT vazio' }); return; }
+              try {
+                if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true });
+                eng.fs.writeFileSync(srtFile, srtStr, 'utf8');
+              } catch (e) {
+                resolve({ ok: false, error: 'Erro ao gravar arquivo SRT: ' + (e.message || e) });
                 return;
-            }
-            var clip = clips[idx];
-            var segs = clip.segmentos || [];
-            var parts = [];
-            var totalSec = 0;
-            for (var i = 0; i < segs.length; i++) {
-                var st = qcToSeconds(segs[i].inicio);
-                var en = qcToSeconds(segs[i].fim);
-                if (en > st) { parts.push(st.toFixed(3) + ':' + en.toFixed(3)); totalSec += (en - st); }
-            }
-            if (parts.length === 0) { qcBuildNext(clips, idx + 1, okCount, errs, srcIdx, aspect, onDone); return; }
-            var num = idx + 1;
-            var seqName = qcCutName(num, totalSec, clip.titulo);
-            var rangesStr = parts.join(',');
-            showStatus('🎬 (' + num + '/' + clips.length + ') ' + seqName + '…', 'info');
-            csInterface.evalScript('quarksCutsBuild("' + qcEscape(seqName) + '","' + rangesStr + '","' + srcIdx + '","' + (aspect || '') + '")', function(result) {
-                var ok = okCount, e2 = errs.slice();
-                if (result && result.indexOf('SUCCESS:') === 0) ok++; else e2.push(result);
-                qcBuildNext(clips, idx + 1, ok, e2, srcIdx, aspect, onDone);
-            });
-        }
+              }
 
-        document.getElementById('qcRefreshBtn').addEventListener('click', function() {
-            qcRefreshSources();
-            showStatus('Lista de fontes atualizada.', 'info');
-        });
-
-        // ---------- 🧹 Limpar cache ----------
-        // Apaga a pasta de cache inteira (áudio + transcrições de TODAS as sequências)
-        // e também sobras de .wav antigas no TEMP (de execuções que não terminaram
-        // limpo, ex.: Premiere fechado no meio de um processamento grande).
-        document.getElementById('qcClearCacheBtn').addEventListener('click', function() {
-            var eng = qcLoadEngine(); if (!eng) return;
-            try {
-                var root = qcCacheRoot(eng);
-                var freed = qcDirSize(eng.fs, eng.pathMod, root);
-                qcRmrf(eng.fs, eng.pathMod, root);
-
-                var tmp = eng.os.tmpdir();
-                var orphaned = eng.fs.readdirSync(tmp).filter(function(n) { return /^qc-.*\.wav$/i.test(n); });
-                orphaned.forEach(function(n) {
-                    var fp = eng.pathMod.join(tmp, n);
-                    try { freed += eng.fs.statSync(fp).size; eng.fs.unlinkSync(fp); } catch (e) {}
+              // ACAO 1: Inserir .SRT na Timeline com estilo .prtextstyle (Padrao 00:00:00:00)
+              if (batchAction === 'timeline_style' && isSequence) {
+                showStatus('🎬 [' + item.name + '] Inserindo legenda na timeline (00:00:00:00)...', 'info');
+                csInterface.evalScript('qcAttachSrtToSequence("' + qcEscape(item.name) + '","' + qcEscape(srtFile) + '","' + qcEscape(textStylePath || '') + '","' + qcEscape(item.nodeId || '') + '")', function(attRes) {
+                  if (attRes && attRes.indexOf('OK:') === 0) {
+                    resolve({ ok: true, srtPath: srtFile, name: item.name, onTimeline: true });
+                  } else {
+                    resolve({ ok: true, srtPath: srtFile, name: item.name, timelineWarning: attRes });
+                  }
                 });
+                return;
+              }
 
-                var mb = Math.round(freed / 1024 / 1024);
-                showStatus('🧹 Cache limpo — ' + mb + ' MB liberados.', 'success');
-            } catch (e) {
-                showStatus('⚠️ Erro ao limpar cache: ' + (e.message || e), 'error');
+              // ACAO 2: Inserir MOGRTs na timeline
+              if (batchAction === 'with_mogrt' && isSequence) {
+                var mogrtPath = qcResolveMogrt(eng);
+                if (mogrtPath) {
+                  showStatus('🎨 [' + item.name + '] Inserindo MOGRTs na timeline...', 'info');
+                  var textParam = eng.cfg.mogrt_text_param || 'Source Text';
+                  var payload = { mogrt: mogrtPath, param: textParam, caps: capsFinal.map(function(c) { return { s: c.start, e: c.end, t: c.text }; }) };
+                  csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function() {
+                    resolve({ ok: true, srtPath: srtFile, name: item.name });
+                  });
+                  return;
+                }
+              }
+
+              // ACAO 3: Apenas salvar e importar .SRT
+              resolve({ ok: true, srtPath: srtFile, name: item.name });
             }
-        });
 
-        // ---------- 📂 Carregar clips.json ----------
-        document.getElementById('qcLoadBtn').addEventListener('click', function() {
-            if (!qcComecar()) return;
-            var srcIdx = document.getElementById('qcSource').value;
-            if (srcIdx === '' || srcIdx === null) { showStatus('⚠️ Escolha a Fonte primeiro (🔄 se a lista estiver vazia).', 'error'); return; }
-            showStatus('📂 Selecione o clips.json…', 'info');
-            var dlg;
-            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o clips.json', '', ['json']); }
-            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return; }
-            if (!dlg || !dlg.data || dlg.data.length === 0) { showStatus('Cancelado.', 'info'); return; }
-            var fr = window.cep.fs.readFile(dlg.data[0]);
-            if (fr.err !== 0) { showStatus('⚠️ Erro ao ler o arquivo (cód ' + fr.err + ')', 'error'); return; }
-            var manifest;
-            try { manifest = JSON.parse(fr.data); } catch (e) { showStatus('⚠️ clips.json inválido: ' + e, 'error'); return; }
-            var clips = manifest.clips || [];
-            if (!clips.length) { showStatus('⚠️ Nenhum corte no arquivo.', 'error'); return; }
-            qcBuildNext(clips, 0, 0, [], srcIdx, document.getElementById('qcAspect').value);
-        });
-
-        // ---------- engine compartilhado (Node) ----------
-        function qcSanitizeFile(name) {
-            return String(name).replace(/[<>:"/\\|?*]+/g, '').replace(/\s+/g, ' ').trim().substring(0, 80);
-        }
-
-        // Carrega os módulos Node + config. Retorna o "eng" ou null (e mostra erro).
-        function qcLoadEngine() {
-            if (typeof require === 'undefined') {
-                showStatus('⚠️ Node não está habilitado. Reinstale a extensão (INSTALL.bat).', 'error');
-                return null;
-            }
-            try {
-                var fs = require('fs'), pathMod = require('path'), os = require('os');
-                var extRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
-                var gem = require(extRoot + '/engine/gemini-cortes.js');
-                var tr = require(extRoot + '/engine/transcribe.js');
-                var cfgPath = extRoot + '/engine/config.json';
-                return {
-                    fs: fs, pathMod: pathMod, os: os, extRoot: extRoot, cfgPath: cfgPath,
-                    cfg: JSON.parse(fs.readFileSync(cfgPath, 'utf8')),
-                    transcribe: tr.transcribe,
-                    resolveModelPath: tr.resolveModelPath,
-                    gerarCortes: gem.gerarCortes,
-                    corrigirLegendas: gem.corrigirLegendas,
-                    corrigirPalavras: gem.corrigirPalavras,
-                    srtMod: require(extRoot + '/engine/srt.js')
-                };
-            } catch (e) {
-                showStatus('⚠️ Falha ao carregar motor/config: ' + (e.message || e), 'error');
-                return null;
-            }
-        }
-
-        // Resolve o preset .epr (relativo à extensão; pede 1x e salva se faltar). null = abortar.
-        function qcResolvePreset(eng) {
-            var preset = eng.cfg.audio_export_preset || '';
-            if (preset && !eng.pathMod.isAbsolute(preset)) preset = eng.pathMod.join(eng.extRoot, preset);
-            if (preset && eng.fs.existsSync(preset)) return preset;
-            showStatus('📂 Selecione um preset de ÁUDIO (.epr)…', 'info');
-            var dlg;
-            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione um preset de áudio (.epr)', '', ['epr']); }
-            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return null; }
-            if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return null; }
-            preset = dlg.data[0];
-            eng.cfg.audio_export_preset = preset;
-            try { eng.fs.writeFileSync(eng.cfgPath, JSON.stringify(eng.cfg, null, 2)); } catch (e) {}
-            return preset;
-        }
-
-        // ---------- cache persistente (áudio exportado + transcrições) ----------
-        // %LOCALAPPDATA%\QuarksCuts\cache\<sequencia>\  — sobrevive entre sessões,
-        // ao contrário do TEMP. Evita reexportar/retranscrever quando só a
-        // qualidade do Whisper ou a quantidade/duração dos cortes muda.
-        function qcCacheRoot(eng) {
-            var base = process.env.LOCALAPPDATA || eng.os.tmpdir();
-            var root = eng.pathMod.join(base, 'QuarksCuts', 'cache');
-            if (!eng.fs.existsSync(root)) eng.fs.mkdirSync(root, { recursive: true });
-            return root;
-        }
-
-        function qcRmrf(fs, pathMod, p) {
-            if (!fs.existsSync(p)) return;
-            var st = fs.statSync(p);
-            if (st.isDirectory()) {
-                fs.readdirSync(p).forEach(function(name) { qcRmrf(fs, pathMod, pathMod.join(p, name)); });
-                fs.rmdirSync(p);
-            } else {
-                fs.unlinkSync(p);
-            }
-        }
-
-        function qcDirSize(fs, pathMod, p) {
-            if (!fs.existsSync(p)) return 0;
-            var st = fs.statSync(p);
-            if (!st.isDirectory()) return st.size;
-            var total = 0;
-            fs.readdirSync(p).forEach(function(name) { total += qcDirSize(fs, pathMod, pathMod.join(p, name)); });
-            return total;
-        }
-
-        // Exporta o áudio da seq ativa + transcreve, REAPROVEITANDO cache quando possível:
-        // - transcript-<modelo>.json em cache -> nem exporta áudio, usa a transcrição direto.
-        // - audio.wav em cache -> pula a exportação (lenta em sequências grandes), só transcreve.
-        // - nada em cache -> exporta e transcreve do zero, e guarda os dois para a próxima vez.
-        // Promise<{segments}>.
-        function qcExportAndTranscribe(eng, preset, modelSel) {
-            return new Promise(function(resolve, reject) {
-                csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
-                    if (!keyRes || keyRes.indexOf('OK:') !== 0) { reject(new Error(keyRes || 'Não achei a sequência ativa.')); return; }
-                    var cacheDir = eng.pathMod.join(qcCacheRoot(eng), keyRes.substring(3));
-                    if (!eng.fs.existsSync(cacheDir)) eng.fs.mkdirSync(cacheDir, { recursive: true });
-
-                    var modelBase;
-                    if (modelSel && modelSel.indexOf('fw:') === 0) {
-                        // motor faster-whisper: cache separado por tamanho (fw-large-v3 etc.)
-                        modelBase = 'fw-' + modelSel.substring(3);
-                    } else {
-                        var modelPath = eng.resolveModelPath(modelSel);
-                        modelBase = modelPath ? eng.pathMod.basename(modelPath).replace(/\.bin$/i, '') : 'default';
-                    }
-                    var transcriptFile = eng.pathMod.join(cacheDir, 'transcript-' + modelBase + '.json');
-                    var audioFile = eng.pathMod.join(cacheDir, 'audio.wav');
-
-                    // 1) transcrição já em cache p/ esse modelo -> nem precisa do áudio.
-                    if (eng.fs.existsSync(transcriptFile)) {
-                        try {
-                            var cachedSegs = JSON.parse(eng.fs.readFileSync(transcriptFile, 'utf8'));
-                            showStatus('♻️ Reaproveitando transcrição já feita (cache).', 'info');
-                            resolve({ segments: cachedSegs, language: 'auto' });
-                            return;
-                        } catch (e) { /* cache corrompido: segue o fluxo normal */ }
-                    }
-
-                    function transcreverDe(mediaPath) {
-                        showStatus('🎙️ Transcrevendo… (pode demorar alguns minutos)', 'info');
-                        eng.transcribe(mediaPath, { onProgress: function(m) { showStatus('🎙️ ' + m, 'info'); }, model: modelSel || undefined })
-                            .then(function(res) {
-                                try { eng.fs.writeFileSync(transcriptFile, JSON.stringify(res.segments)); } catch (e) {}
-                                resolve(res);
-                            })
-                            .catch(reject);
-                    }
-
-                    // 2) áudio já em cache -> pula a exportação do Premiere (a parte lenta).
-                    if (eng.fs.existsSync(audioFile)) {
-                        showStatus('♻️ Reaproveitando áudio já exportado (cache).', 'info');
-                        transcreverDe(audioFile);
-                        return;
-                    }
-
-                    // 3) nada em cache -> exporta direto PARA a pasta de cache (fica salvo).
-                    showStatus('🎚️ Exportando o áudio da sequência ativa…', 'info');
-                    csInterface.evalScript('qcExportActiveAudio("' + qcEscape(preset) + '","' + qcEscape(audioFile) + '")', function(expRes) {
-                        if (!expRes || expRes.indexOf('OK:') !== 0) { reject(new Error(expRes || 'Falha ao exportar o áudio.')); return; }
-                        transcreverDe(expRes.substring(3));
-                    });
-                });
-            });
-        }
-
-        // ---------- ⚡ Gerar cortes (Whisper offline + Gemini) ----------
-        document.getElementById('qcGenBtn').addEventListener('click', function() {
-            if (!qcComecar()) return;
-            var eng = qcLoadEngine(); if (!eng) return;
-            var preset = qcResolvePreset(eng); if (!preset) return;
-
-            var aspect = document.getElementById('qcAspect').value;
-            var modelSel = document.getElementById('qcQuality').value;
-            var qtd = parseInt(document.getElementById('qcQtd').value, 10);
-            var minD = parseInt(document.getElementById('qcMin').value, 10);
-            var maxD = parseInt(document.getElementById('qcMax').value, 10);
-            var opts = { quantidade: isNaN(qtd) ? 0 : qtd, minDur: isNaN(minD) ? 0 : minD, maxDur: isNaN(maxD) ? 0 : maxD };
-
-            opts.onProgress = function(m) { showStatus('🧠 ' + m, 'info'); };
-
-            qcExportAndTranscribe(eng, preset, modelSel)
-                .then(function(res) {
-                    showStatus('🧠 Pensando nos melhores cortes (Gemini)…', 'info');
-                    return eng.gerarCortes(res.segments, opts);
-                })
-                .then(function(out) {
-                    var clips = out.clips || [];
-                    if (!clips.length) { showStatus('⚠️ Nenhum corte sugerido.', 'error'); return; }
-                    qcWriteViralReport(eng, clips); // best-effort, em paralelo à montagem
-                    csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
-                        if (!idxRes || idxRes.indexOf('OK:') !== 0) { showStatus(idxRes || '⚠️ Não achei a sequência ativa.', 'error'); return; }
-                        qcBuildNext(clips, 0, 0, [], idxRes.substring(3), aspect);
-                    });
-                })
-                .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
-        });
-
-        // Formata segundos como HH:MM:SS (p/ o relatório).
-        function qcHms(sec) {
-            sec = Math.max(0, Math.floor(sec));
-            var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-            function p2(n) { return (n < 10 ? '0' : '') + n; }
-            return p2(h) + ':' + p2(m) + ':' + p2(s);
-        }
-
-        // Grava "relatorio-cortes.txt" na pasta do projeto: um dossiê por corte —
-        // título, avaliação de viralidade, mapa de tempos dos segmentos e a
-        // LEGENDA pronta para postar no Instagram (com CTA e hashtags).
-        function qcWriteViralReport(eng, clips) {
-            try {
-                if (!clips.length) return;
-                csInterface.evalScript('qcProjectDir()', function(dirRes) {
-                    var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
-                    var L = ['════════════════════════════════════════════',
-                             ' RELATÓRIO DE CORTES — Quarks Cuts',
-                             ' Gerado em ' + new Date().toLocaleString(),
-                             ' ' + clips.length + ' corte(s)',
-                             '════════════════════════════════════════════', ''];
-                    for (var i = 0; i < clips.length; i++) {
-                        var c = clips[i], a = c.avaliacao || {};
-                        var num = (i + 1 < 10 ? '0' : '') + (i + 1);
-                        var dur = qcClipDuration(c);
-                        L.push('──────────────────────────────────────────');
-                        L.push(num + ' — ' + (c.titulo || 'Corte ' + (i + 1)) + '  (' + Math.round(dur) + 's)');
-                        L.push('Potencial: ' + (a.potencial_viral || 'N/A') + ' | Hook: ' + (a.hook || 'N/A'));
-                        L.push('');
-                        L.push('MAPA DE EDIÇÃO (tempos do episódio original):');
-                        var segs = c.segmentos || [];
-                        for (var j = 0; j < segs.length; j++) {
-                            var st = qcToSeconds(segs[j].inicio), en = qcToSeconds(segs[j].fim);
-                            L.push('  ' + (j + 1) + (j === 0 ? ' (GANCHO)' : '') + ': ' + qcHms(st) + ' → ' + qcHms(en));
-                        }
-                        L.push('');
-                        L.push('LEGENDA PARA REDES SOCIAIS:');
-                        L.push(c.legenda_ig ? c.legenda_ig : '(não gerada)');
-                        L.push('');
-                        if (c.dicas_edicao) {
-                            L.push('DICAS DE EDIÇÃO (textos na tela, destaques, b-roll, CTA):');
-                            L.push(c.dicas_edicao);
-                            L.push('');
-                        }
-                    }
-                    var file = eng.pathMod.join(base, 'relatorio-cortes.txt');
-                    try { eng.fs.writeFileSync(file, L.join('\r\n'), 'utf8'); qcPanelLog('relatório gravado: ' + file); } catch (e) {}
-                });
-            } catch (e) { /* relatório é opcional */ }
-        }
-
-        // ---------- 💬 Legenda: pipeline comum ----------
-        // Transcreve a sequência ativa → agrupa por pontuação → corrige/traduz →
-        // alinha ao frame. Retorna Promise<caps> ([{start,end,text}], 0-based).
-        // Usado pelos dois botões: .srt e MOGRT.
-        function qcPreparaLegenda(eng, preset, modelSel, idioma) {
-            return qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
-                var words = res.segments || [];
-                if (!words.length) throw new Error('Sem fala detectada nesta sequência.');
-                // 1) Pontua/corrige EM NÍVEL DE PALAVRA, ANTES de agrupar — o Whisper
-                //    em PT muitas vezes vem sem pontuação, e a quebra de legenda é NA
-                //    pontuação. Corrigir depois de agrupar quebrava as linhas errado.
-                showStatus('📝 Pontuando e corrigindo a transcrição…', 'info');
-                return eng.corrigirPalavras(words).then(function(fixed) {
-                    var wordsFixed = words.map(function(w, i) { return { start: w.start, end: w.end, text: (fixed[i] || w.text) }; });
-                    // 2) Agrupa quebrando na pontuação (agora presente) e funde
-                    //    legendas curtíssimas (fala rápida vira pisca-pisca).
-                    var grupos = eng.srtMod.agruparPorPontuacao(wordsFixed, 20);
-                    grupos = eng.srtMod.mergeShortCaptions(grupos);
-                    if (!grupos.length) throw new Error('Legenda vazia.');
-                    // 3) Tradução (se pedida) — linha a linha, preservando o timing.
-                    var pTexto;
-                    if (idioma) {
-                        showStatus('🌐 Traduzindo a legenda…', 'info');
-                        pTexto = eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma });
-                    } else {
-                        pTexto = Promise.resolve(grupos.map(function(c) { return c.text; })); // já corrigida
-                    }
-                    return pTexto.then(function(txts) {
-                        var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (txts[i] || c.text) }; });
-                        caps = eng.srtMod.capitalizeCaptions(caps); // 1ª legenda e pós-frase em maiúscula
-                        return new Promise(function(resolve) {
-                            // Alinha ao frame da sequência (senão o Premiere arredonda depois).
-                            csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
-                                var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
-                                var lead = (typeof eng.cfg.caption_lead_ms === 'number' ? eng.cfg.caption_lead_ms : 150) / 1000;
-                                resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps, lead) : caps);
-                            });
-                        });
-                    });
-                });
-            });
-        }
-
-        // ---------- 💬 Gerar legenda .srt (arrastar na timeline) ----------
-        document.getElementById('qcLegendaBtn').addEventListener('click', function() {
-            if (!qcComecar()) return;
-            var eng = qcLoadEngine(); if (!eng) return;
-            var preset = qcResolvePreset(eng); if (!preset) return;
-            var modelSel = document.getElementById('qcQuality').value;
-            var idioma = document.getElementById('qcLegIdioma').value; // '' = original
-
-            qcPreparaLegenda(eng, preset, modelSel, idioma)
-                .then(function(caps) {
-                    var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], caps);
-                    if (!srtStr.trim()) { showStatus('⚠️ Legenda vazia.', 'error'); return; }
-                    csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
-                        var nome = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'legenda';
-                        csInterface.evalScript('qcProjectDir()', function(dirRes) {
-                            var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
-                            var outDir = eng.pathMod.join(base, 'legendas');
-                            // legenda traduzida ganha sufixo do idioma (não sobrescreve a original)
-                            var sufixo = idioma ? '.' + idioma : '';
-                            var file = eng.pathMod.join(outDir, qcSanitizeFile(nome) + sufixo + '.srt');
-                            try {
-                                if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true });
-                                eng.fs.writeFileSync(file, srtStr, 'utf8');
-                            } catch (e) { showStatus('⚠️ Erro ao salvar o .srt: ' + (e.message || e), 'error'); return; }
-                            csInterface.evalScript('qcImportLegendas("' + qcEscape(file) + '")', function(impRes) {
-                                var imported = (impRes && impRes.indexOf('SUCCESS:') === 0);
-                                showStatus('✓ Legenda gerada: ' + file + (imported ? ' (importada na bin "legendas").' : ' (importe manualmente).'), 'success');
-                            });
-                        });
-                    });
-                })
-                .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
-        });
-
-        // ---------- 🎨 Legenda estilizada (MOGRT direto na timeline) ----------
-        // Usa um modelo .mogrt (o padrão de podcast de vocês, exportado do Essential
-        // Graphics) e insere um gráfico por legenda na trilha de cima do corte.
-        function qcResolveMogrt(eng) {
-            var p = eng.cfg.mogrt_path || '';
-            if (p && !eng.pathMod.isAbsolute(p)) p = eng.pathMod.join(eng.extRoot, p);
-            if (p && eng.fs.existsSync(p)) return p;
-            showStatus('📂 Selecione o modelo .mogrt da legenda (padrão do podcast)…', 'info');
-            var dlg;
-            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o .mogrt da legenda', '', ['mogrt']); }
-            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return null; }
-            if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return null; }
-            p = dlg.data[0];
-            eng.cfg.mogrt_path = p;
-            try { eng.fs.writeFileSync(eng.cfgPath, JSON.stringify(eng.cfg, null, 2)); } catch (e) {}
-            return p;
-        }
-
-        document.getElementById('qcMogrtBtn').addEventListener('click', function() {
-            if (!qcComecar()) return;
-            var eng = qcLoadEngine(); if (!eng) return;
-            var preset = qcResolvePreset(eng); if (!preset) return;
-            var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
-            var modelSel = document.getElementById('qcQuality').value;
-            var idioma = document.getElementById('qcLegIdioma').value;
-            var textParam = eng.cfg.mogrt_text_param || 'Source Text';
-
-            qcPreparaLegenda(eng, preset, modelSel, idioma)
-                .then(function(caps) {
-                    showStatus('🎨 Inserindo ' + caps.length + ' legenda(s) estilizada(s) na timeline…', 'info');
-                    var payload = {
-                        mogrt: mogrt,
-                        param: textParam,
-                        caps: caps.map(function(c) { return { s: c.start, e: c.end, t: c.text }; })
-                    };
-                    // JSON duplo-serializado: vira uma string literal segura dentro do evalScript.
-                    csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
-                        if (res && res.indexOf('SUCCESS:') === 0) showStatus('✓ ' + res.substring(9), 'success');
-                        else showStatus(res || '⚠️ Falha ao inserir os gráficos.', 'error');
-                    });
-                })
-                .catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
-        });
-
-        // ---------- 🎨 MOGRTs a partir de um .srt ajustado ----------
-        // Fluxo: a pessoa ajusta a legenda na timeline → exporta o SRT pelo painel
-        // Texto do Premiere → este botão lê o arquivo e insere os MOGRTs nos tempos
-        // AJUSTADOS. Não transcreve nada — é instantâneo e offline.
-        document.getElementById('qcMogrtSrtBtn').addEventListener('click', function() {
-            if (!qcComecar()) return;
-            var eng = qcLoadEngine(); if (!eng) return;
-            var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
-            var textParam = eng.cfg.mogrt_text_param || 'Source Text';
-
-            showStatus('📂 Selecione o .srt (ajustado) da legenda…', 'info');
-            var dlg;
-            try { dlg = window.cep.fs.showOpenDialogEx(false, false, 'Selecione o .srt da legenda ajustada', '', ['srt']); }
-            catch (e) { showStatus('⚠️ Não foi possível abrir o seletor: ' + e, 'error'); return; }
-            if (!dlg || !dlg.data || !dlg.data.length) { showStatus('Cancelado.', 'info'); return; }
-
-            var caps;
-            try { caps = eng.srtMod.parseSrtContent(eng.fs.readFileSync(dlg.data[0], 'utf8')); }
-            catch (e) { showStatus('⚠️ Erro ao ler o .srt: ' + (e.message || e), 'error'); return; }
-            if (!caps.length) { showStatus('⚠️ Nenhuma legenda válida no arquivo.', 'error'); return; }
-
-            csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+            if (isSequence) {
+              csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
                 var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
-                // srt ajustado na mão: sem lead (os tempos já são a intenção do editor)
-                if (fps > 0) caps = eng.srtMod.snapToFrames(caps, fps, 0);
-                showStatus('🎨 Inserindo ' + caps.length + ' legenda(s) estilizada(s) na timeline…', 'info');
-                var payload = {
-                    mogrt: mogrt,
-                    param: textParam,
-                    caps: caps.map(function(c) { return { s: c.start, e: c.end, t: c.text }; })
-                };
-                csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
-                    if (res && res.indexOf('SUCCESS:') === 0) showStatus('✓ ' + res.substring(9), 'success');
-                    else showStatus(res || '⚠️ Falha ao inserir os gráficos.', 'error');
-                });
-            });
-        });
+                finalizarSrt(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+              });
+            } else {
+              finalizarSrt(caps);
+            }
+          }).catch(function(e) { resolve({ ok: false, error: e.message || e }); });
+      }).catch(function(e) { resolve({ ok: false, error: e.message || e }); });
+    }
 
-        // ---------- 🪺 Desaninhar ----------
-        document.getElementById('qcUnnestBtn').addEventListener('click', function() {
-            if (!qcComecar()) return;
-            showStatus('🪺 Desaninhando a sequência ativa…', 'info');
-            csInterface.evalScript('quarksUnnestActive()', function(result) {
-                if (result.indexOf('ERROR:') === 0) showStatus(result, 'error');
-                else if (result.indexOf('SUCCESS:') === 0) showStatus(result, 'success');
-                else showStatus(result, 'info');
-            });
-        });
+    // Se o item e um clipe avulso com arquivo direto e NAO um corte editado
+    if (item.type === 'clip' && item.mediaPath && eng.fs.existsSync(item.mediaPath) && item.name.indexOf('EDITADO') === -1) {
+      transcreverEMontarSrt(item.mediaPath, false);
+    } else {
+      var audioFile = eng.pathMod.join(cacheRoot, safeName + '-audio.wav');
+      showStatus('🎚️ [' + item.name + '] Exportando áudio...', 'info');
+      csInterface.evalScript('qcExportSequenceAudio("' + qcEscape(item.name) + '","' + qcEscape(preset) + '","' + qcEscape(audioFile) + '","' + qcEscape(item.nodeId || '') + '")', function(expRes) {
+        if (!expRes || expRes.indexOf('OK:') !== 0) {
+          if (item.mediaPath && eng.fs.existsSync(item.mediaPath)) {
+            transcreverEMontarSrt(item.mediaPath, false);
+          } else {
+            resolve({ ok: false, error: 'Falha ao exportar áudio: ' + (expRes || 'desconhecido') });
+          }
+          return;
+        }
+        transcreverEMontarSrt(audioFile, true);
+      });
+    }
+  });
+}
 
-        // Rede de segurança: some silenciosamente com .wav órfãos antigos (>3h) no TEMP,
-        // sobras de execuções que não terminaram limpo (Premiere fechado no meio, etc.).
-        function qcSweepOrphanedTemp() {
-            if (typeof require === 'undefined') return;
-            try {
-                var fs = require('fs'), pathMod = require('path'), os = require('os');
-                var tmp = os.tmpdir();
-                var cutoff = Date.now() - 3 * 60 * 60 * 1000;
-                fs.readdirSync(tmp).forEach(function(n) {
-                    if (!/^qc-.*\.wav$/i.test(n)) return;
-                    var fp = pathMod.join(tmp, n);
-                    try { if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp); } catch (e) {}
-                });
-            } catch (e) { /* best-effort, não bloqueia o painel */ }
+// BOTAO: APLICAR LEGENDAS .SRT JA EXISTENTES NAS TIMELINES (EM LOTE)
+var qcBatchApplyExistingBtn = document.getElementById('qcBatchApplyExistingSrtBtn');
+if (qcBatchApplyExistingBtn) {
+  qcBatchApplyExistingBtn.addEventListener('click', function() {
+    if (!qcComecar()) return;
+    var eng = qcLoadEngine(); if (!eng) return;
+
+    var binSelEl = document.getElementById('qcBinSelect');
+    var binTarget = binSelEl ? binSelEl.value : 'cortes';
+    var binLabel = (binSelEl && binSelEl.selectedOptions && binSelEl.selectedOptions[0]) ? (binSelEl.selectedOptions[0].dataset.binName || binSelEl.selectedOptions[0].textContent) : binTarget;
+    var filterType = document.getElementById('qcBatchItemType').value;
+    var stylePath = document.getElementById('qcBatchTextStylePath') ? document.getElementById('qcBatchTextStylePath').value.trim() : '';
+
+    showStatus('📂 Listando sequências do compartimento "' + binLabel + '"...', 'info');
+
+    csInterface.evalScript('qcListItemsInBin("' + qcEscape(binTarget) + '")', function(res) {
+      if (!res || res.indexOf('OK:') !== 0) {
+        showStatus('Erro ao listar compartimento: ' + (res || 'vazio'), 'error');
+        return;
+      }
+
+      var rawPayload = res.substring(3);
+      var rawItems = [];
+      try {
+        if (rawPayload.indexOf('[') === 0) rawItems = JSON.parse(rawPayload);
+      } catch (eJson) {}
+
+      var items = [];
+      for (var i = 0; i < rawItems.length; i++) {
+        var it = rawItems[i];
+        if (!it || !it.name) continue;
+        if (filterType === 'clip' && it.type !== 'clip') continue;
+        if (filterType === 'seq' && it.type !== 'seq') continue;
+        items.push(it);
+      }
+      if (items.length === 0 && filterType === 'seq' && rawItems.length > 0) {
+        items = rawItems.slice();
+      }
+
+      if (items.length === 0) {
+        showStatus('⚠️ Nenhuma sequência encontrada no compartimento "' + binLabel + '".', 'error');
+        return;
+      }
+
+      csInterface.evalScript('qcProjectDir()', function(dirRes) {
+        var baseDir = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+        var outDir = eng.pathMod.join(baseDir, 'legendas');
+
+        if (!eng.fs.existsSync(outDir)) {
+          showStatus('⚠️ Pasta de legendas não encontrada: ' + outDir, 'error');
+          return;
         }
 
-        window.addEventListener('load', function() {
-            qcRefreshSources();
-            qcSweepOrphanedTemp();
-            showStatus('Pronto. Abra a sequência e gere os cortes.', 'info');
+        var attachedCount = 0;
+        var errors = [];
+
+        function runAttachNext(idx) {
+          if (idx >= items.length) {
+            if (attachedCount > 0) {
+              var msg = '✔ Sucesso! ' + attachedCount + ' sequência(s) receberam a faixa de legenda em 00:00:00:00!';
+              if (errors.length > 0) msg += ' (' + errors.length + ' erros: ' + errors.join('; ') + ')';
+              showStatus(msg, errors.length > 0 ? 'error' : 'success');
+            } else {
+              showStatus('⚠️ Nenhuma legenda foi inserida. ' + errors.join('; '), 'error');
+            }
+            return;
+          }
+
+          var it = items[idx];
+          showStatus('🎬 [' + (idx + 1) + '/' + items.length + '] Localizando .SRT para "' + it.name + '"...', 'info');
+
+          var srtFile = qcFindMatchingSrt(it, outDir, eng.fs, eng.pathMod);
+          if (!srtFile) {
+            errors.push(it.name + ' (.srt não encontrado)');
+            runAttachNext(idx + 1);
+            return;
+          }
+
+          showStatus('🎬 [' + (idx + 1) + '/' + items.length + '] Inserindo legenda em "' + it.name + '" (00:00:00:00)...', 'info');
+          csInterface.evalScript('qcAttachSrtToSequence("' + qcEscape(it.name) + '","' + qcEscape(srtFile) + '","' + qcEscape(stylePath) + '","' + qcEscape(it.nodeId || '') + '")', function(attRes) {
+            if (attRes && attRes.indexOf('OK:') === 0) {
+              attachedCount++;
+            } else {
+              errors.push(it.name + ' (' + (attRes || 'erro') + ')');
+            }
+            runAttachNext(idx + 1);
+          });
+        }
+
+        runAttachNext(0);
+      });
+    });
+  });
+}
+
+// BOTAO: GERAR E INSERIR LEGENDAS DE TODA A PASTA SELECIONADA
+document.getElementById('qcBatchLegendasBtn').addEventListener('click', function() {
+  if (!qcComecar()) return;
+  var eng = qcLoadEngine(); if (!eng) return;
+  var preset = qcResolvePreset(eng); if (!preset) return;
+
+  var binSelEl = document.getElementById('qcBinSelect');
+  var binTarget = binSelEl ? binSelEl.value : 'cortes';
+  var binLabel = (binSelEl && binSelEl.selectedOptions && binSelEl.selectedOptions[0]) ? (binSelEl.selectedOptions[0].dataset.binName || binSelEl.selectedOptions[0].textContent) : binTarget;
+  var filterType = document.getElementById('qcBatchItemType').value;
+  var batchAction = document.getElementById('qcBatchMogrtOption').value;
+  var stylePath = document.getElementById('qcBatchTextStylePath') ? document.getElementById('qcBatchTextStylePath').value.trim() : '';
+  var modelSel = document.getElementById('qcQuality').value;
+  var idioma = document.getElementById('qcLegIdioma').value;
+
+  showStatus('📂 Buscando itens no compartimento "' + binLabel + '"...', 'info');
+
+  csInterface.evalScript('qcListItemsInBin("' + qcEscape(binTarget) + '")', function(res) {
+    if (!res || res.indexOf('OK:') !== 0) {
+      // Tenta fallback com nome textual se o nodeId nao achou
+      csInterface.evalScript('qcListItemsInBin("cortes")', function(fallbackRes) {
+        if (!fallbackRes || fallbackRes.indexOf('OK:') !== 0) {
+          showStatus(res || 'Erro ao listar compartimento.', 'error');
+          return;
+        }
+        processarLinhas(fallbackRes);
+      });
+      return;
+    }
+    processarLinhas(res);
+
+    function processarLinhas(rawRes) {
+      var rawPayload = rawRes.substring(3);
+      var rawItems = [];
+      try {
+        if (rawPayload.indexOf('[') === 0) {
+          rawItems = JSON.parse(rawPayload);
+        }
+      } catch (eJson) {}
+
+      // Fallback para formato legado se nao for JSON
+      if (!rawItems.length && rawPayload) {
+        var rawLines = rawPayload.split('\n');
+        for (var l = 0; l < rawLines.length; l++) {
+          var line = rawLines[l];
+          if (!line) continue;
+          var p = line.split('|');
+          if (p.length >= 2) {
+            rawItems.push({ name: p[0], type: p[1], nodeId: p[2], mediaPath: p[3] });
+          }
+        }
+      }
+
+      var items = [];
+      qcPanelLog('Itens encontrados no compartimento ' + binLabel + ' (' + rawItems.length + ' itens)');
+
+      for (var i = 0; i < rawItems.length; i++) {
+        var it = rawItems[i];
+        if (!it || !it.name) continue;
+        if (filterType === 'seq' && it.type !== 'seq') continue;
+        if (filterType === 'clip' && it.type !== 'clip') continue;
+        items.push(it);
+      }
+
+      // Se filtrou por sequencia mas nenhum veio como seq, aproveita todos os itens do compartimento
+      if (items.length === 0 && filterType === 'seq' && rawItems.length > 0) {
+        items = rawItems.slice();
+        qcPanelLog('Filtro seq flexibilizado: processando todos os ' + items.length + ' itens do compartimento.');
+      }
+
+      if (items.length === 0) {
+        showStatus('⚠️ Nenhum item encontrado no compartimento "' + binLabel + '".', 'error');
+        return;
+      }
+
+    csInterface.evalScript('qcProjectDir()', function(dirRes) {
+      var baseDir = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+      var outDir = eng.pathMod.join(baseDir, 'legendas');
+      var cacheRoot = qcCacheRoot(eng);
+
+      var okPaths = [];
+      var timelineCount = 0;
+      var errors = [];
+
+      function runNext(idx) {
+        if (idx >= items.length) {
+          if (okPaths.length > 0) {
+            showStatus('📥 Importando ' + okPaths.length + ' legendas na bin "legendas"...', 'info');
+            csInterface.evalScript('qcImportLegendas("' + qcEscape(okPaths.join('|||')) + '")', function(impRes) {
+              var timelineMsg = timelineCount > 0 ? (' (' + timelineCount + ' inseridas na timeline em 00:00:00:00)') : '';
+              if (errors.length === 0) {
+                showStatus('✔ Sucesso! ' + okPaths.length + ' legenda(s) geradas' + timelineMsg + ' e importadas na bin "legendas".', 'success');
+              } else {
+                showStatus('✔ Concluído: ' + okPaths.length + ' ok' + timelineMsg + ', ' + errors.length + ' com erro. ' + errors.join('; '), 'error');
+              }
+            });
+          } else {
+            showStatus('⚠️ Nenhuma legenda gerada. ' + errors.join('; '), 'error');
+          }
+          return;
+        }
+
+        var it = items[idx];
+        showStatus('📦 [' + (idx + 1) + '/' + items.length + '] Processando "' + it.name + '"...', 'info');
+
+        qcProcessBatchItem(eng, preset, modelSel, idioma, it, cacheRoot, outDir, batchAction, stylePath)
+          .then(function(result) {
+            if (result.ok && result.srtPath) {
+              okPaths.push(result.srtPath);
+              if (result.onTimeline) timelineCount++;
+            } else {
+              errors.push(it.name + ' (' + (result.error || 'erro') + ')');
+            }
+            runNext(idx + 1);
+          })
+          .catch(function(e) {
+            errors.push(it.name + ' (' + (e.message || e) + ')');
+            runNext(idx + 1);
+          });
+      }
+
+      runNext(0);
+    });
+  }
+  });
+});
+
+document.getElementById('qcUnnestBtn').addEventListener('click', function() {
+  if (!qcComecar()) return; showStatus('\u{1FAB9} Desaninhando a sequencia ativa...', 'info');
+  csInterface.evalScript('quarksUnnestActive()', function(result) {
+    if (result.indexOf('ERROR:') === 0) showStatus(result, 'error');
+    else if (result.indexOf('SUCCESS:') === 0) showStatus(result, 'success');
+    else showStatus(result, 'info');
+  });
+});
+
+/* --- CONFIGURAÇÕES & AJUSTES --- */
+var qcKeyVis = false;
+document.getElementById('qcToggleKeyVisBtn').addEventListener('click', function() {
+  var input = document.getElementById('qcApiKeyInput');
+  qcKeyVis = !qcKeyVis;
+  input.type = qcKeyVis ? 'text' : 'password';
+  this.textContent = qcKeyVis ? '🔒' : '👁️';
+});
+
+document.getElementById('qcModelSelect').addEventListener('change', function() {
+  var isCustom = (this.value === 'custom');
+  document.getElementById('qcCustomModelWrap').style.display = isCustom ? 'block' : 'none';
+});
+
+document.getElementById('qcSaveSettingsBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  var keyVal = document.getElementById('qcApiKeyInput').value.trim();
+  var modelVal = document.getElementById('qcModelSelect').value;
+  if (modelVal === 'custom') {
+    modelVal = document.getElementById('qcCustomModelInput').value.trim() || 'gemini-3.6-flash';
+  }
+  if (!keyVal) { showStatus('Digite uma chave Gemini valida.', 'error'); return; }
+  var ok = qcSaveUserConfig(eng, { gemini_api_key: keyVal, clip_model: modelVal });
+  if (ok) showStatus('\u2714 Modelo (' + modelVal + ') e chave salvos com sucesso!', 'success');
+});
+
+document.getElementById('qcSavePresetBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  var presetVal = document.getElementById('qcPresetSelect').value;
+  var ok = qcSaveUserConfig(eng, { audio_export_preset: presetVal });
+  if (ok) showStatus('\u2714 Preset de audio atualizado: ' + presetVal, 'success');
+});
+
+function qcInitSettingsUI() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  if (eng.cfg.gemini_api_key && eng.cfg.gemini_api_key.indexOf('COLE_') !== 0) {
+    document.getElementById('qcApiKeyInput').value = eng.cfg.gemini_api_key;
+  }
+  if (eng.cfg.clip_model) {
+    var sel = document.getElementById('qcModelSelect');
+    var found = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === eng.cfg.clip_model) {
+        sel.selectedIndex = i;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      sel.value = 'custom';
+      document.getElementById('qcCustomModelWrap').style.display = 'block';
+      document.getElementById('qcCustomModelInput').value = eng.cfg.clip_model;
+    }
+  }
+  if (eng.cfg.audio_export_preset) {
+    var pSel = document.getElementById('qcPresetSelect');
+    for (var i = 0; i < pSel.options.length; i++) {
+      if (eng.cfg.audio_export_preset.indexOf(pSel.options[i].value) !== -1) {
+        pSel.selectedIndex = i; break;
+      }
+    }
+  }
+}
+
+/* === EDITOR DE TRANSCRICAO === */
+var qcTranscriptItems = [], qcSelectedIndices = new Set(), qcLastClickedIndex = -1;
+document.getElementById('qcOpenTranscriptEditorBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  document.getElementById('qcTranscriptModal').classList.add('open');
+  qcLoadTranscriptList(eng);
+});
+document.getElementById('qcCloseTranscriptModal').addEventListener('click', function() {
+  document.getElementById('qcTranscriptBody').innerHTML = '';
+  document.getElementById('qcTranscriptModal').classList.remove('open');
+});
+function qcLoadTranscriptList(eng) {
+  var sel = document.getElementById('qcTranscriptSelect'); sel.innerHTML = '';
+  var cacheRoot = qcCacheRoot(eng);
+  if (!eng.fs.existsSync(cacheRoot)) { sel.innerHTML = '<option value="">(nenhuma transcricao em cache)</option>'; return; }
+  csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
+    var activeFolder = (keyRes && keyRes.indexOf('OK:') === 0) ? keyRes.substring(3) : '';
+    var folders = eng.fs.readdirSync(cacheRoot), files = [], activeFile = null;
+    folders.forEach(function(f) {
+      var fp = eng.pathMod.join(cacheRoot, f);
+      if (eng.fs.statSync(fp).isDirectory()) {
+        eng.fs.readdirSync(fp).forEach(function(file) {
+          if (file.indexOf('transcript-') === 0 && file.indexOf('.json') !== -1) {
+            var fullPath = eng.pathMod.join(fp, file), item = { folder: f, name: file, fullPath: fullPath };
+            files.push(item);
+            var prefix = activeFolder.indexOf('__') !== -1 ? activeFolder.split('__')[0] + '__' : activeFolder;
+            if ((f === activeFolder || (prefix && f.indexOf(prefix) === 0)) && !activeFile) activeFile = item;
+          }
         });
-    </script>
+      }
+    });
+    if (!files.length) { sel.innerHTML = '<option value="">(nenhuma transcricao encontrada)</option>'; return; }
+    files.forEach(function(item) {
+      var opt = document.createElement('option'); opt.value = item.fullPath;
+      opt.textContent = (item.folder === activeFolder ? '\u2B50 (SEQUENCIA ATIVA) ' : '') + item.folder + ' [' + item.name + ']';
+      sel.appendChild(opt);
+    });
+    sel.onchange = function() { if (this.value) qcRenderTranscriptView(eng, this.value); };
+    if (activeFile) { sel.value = activeFile.fullPath; qcRenderTranscriptView(eng, activeFile.fullPath); }
+    else { var opt = document.createElement('option'); opt.value = ''; opt.textContent = '-- Selecione uma transcricao --'; sel.insertBefore(opt, sel.firstChild); sel.value = ''; document.getElementById('qcTranscriptBody').innerHTML = '<div style="color:#94a3b8;padding:16px;">Selecione uma transcricao acima para editar.</div>'; }
+  });
+}
+function qcRenderTranscriptView(eng, fullPath) {
+  var container = document.getElementById('qcTranscriptBody'); container.innerHTML = '';
+  qcSelectedIndices.clear(); qcLastClickedIndex = -1; qcUpdateTranscriptStats();
+  try {
+    var words = JSON.parse(eng.fs.readFileSync(fullPath, 'utf8')), groups = [], currentGroup = { start: 0, end: 0, words: [] };
+    words.forEach(function(w) {
+      var txt = w.word || w.text || '';
+      if (!currentGroup.words.length) currentGroup.start = w.start;
+      currentGroup.end = w.end; currentGroup.words.push(txt);
+      if (/[.!?]$/.test(txt) || currentGroup.words.length >= 15) { groups.push({ start: currentGroup.start, end: currentGroup.end, text: currentGroup.words.join(' ') }); currentGroup = { start: 0, end: 0, words: [] }; }
+    });
+    if (currentGroup.words.length) groups.push({ start: currentGroup.start, end: currentGroup.end, text: currentGroup.words.join(' ') });
+    qcTranscriptItems = groups;
+    groups.forEach(function(g, idx) {
+      var row = document.createElement('div'); row.className = 'qc-t-row'; row.dataset.index = idx;
+      var timeSpan = document.createElement('span'); timeSpan.style.cssText = 'color:#38bdf8;font-weight:700;font-size:10.5px;margin-right:8px;'; timeSpan.textContent = '[' + qcHms(g.start) + ' -> ' + qcHms(g.end) + ']';
+      var textSpan = document.createElement('span'); textSpan.textContent = g.text;
+      row.appendChild(timeSpan); row.appendChild(textSpan);
+      row.addEventListener('click', function(e) {
+        var currIdx = parseInt(this.dataset.index, 10);
+        if (e.shiftKey && qcLastClickedIndex !== -1) { var s = Math.min(qcLastClickedIndex, currIdx), en = Math.max(qcLastClickedIndex, currIdx); for (var i = s; i <= en; i++) qcSelectedIndices.add(i); }
+        else { if (qcSelectedIndices.has(currIdx)) qcSelectedIndices.delete(currIdx); else qcSelectedIndices.add(currIdx); }
+        qcLastClickedIndex = currIdx; qcHighlightTranscriptRows(); qcUpdateTranscriptStats();
+      });
+      container.appendChild(row);
+    });
+  } catch (e) { container.innerHTML = '<div style="color:#ef4444;">Erro ao carregar arquivo: ' + e.message + '</div>'; }
+}
+function qcHighlightTranscriptRows() { document.querySelectorAll('.qc-t-row').forEach(function(row) { var idx = parseInt(row.dataset.index, 10); if (qcSelectedIndices.has(idx)) row.classList.add('sel'); else row.classList.remove('sel'); }); }
+function qcUpdateTranscriptStats() {
+  var totalDur = 0; qcSelectedIndices.forEach(function(idx) { if (qcTranscriptItems[idx]) totalDur += (qcTranscriptItems[idx].end - qcTranscriptItems[idx].start); });
+  document.getElementById('qcTranscriptStats').textContent = '\u23F1\uFE0F ' + totalDur.toFixed(1) + 's (' + qcSelectedIndices.size + ' trechos)';
+}
+document.getElementById('qcTranscriptBuildBtn').addEventListener('click', function() {
+  if (!qcSelectedIndices.size) { alert('Selecione pelo menos um trecho (Shift + Clique para intervalo).'); return; }
+  var sorted = Array.from(qcSelectedIndices).sort(function(a, b) { return a - b; });
+  var ranges = sorted.map(function(idx) { var item = qcTranscriptItems[idx]; return item.start.toFixed(3) + ':' + item.end.toFixed(3); });
+  var cutName = document.getElementById('qcTranscriptCutName').value || 'Corte Selecionado', aspect = document.getElementById('qcAspect').value;
+  csInterface.evalScript('qcActiveSourceIndex()', function(idxRes) {
+    var srcIdx = (idxRes && idxRes.indexOf('OK:') === 0) ? idxRes.substring(3) : '0';
+    csInterface.evalScript('quarksCutsBuild("' + qcEscape(cutName) + '","' + ranges.join(',') + '","' + srcIdx + '","' + (aspect || '') + '")', function(res) {
+      if (res && res.indexOf('SUCCESS:') === 0) showStatus('\u2714 Sequencia "' + cutName + '" criada!', 'success'); else showStatus(res || 'Erro ao criar sequencia', 'error');
+      document.getElementById('qcTranscriptModal').classList.remove('open');
+    });
+  });
+});
+document.getElementById('qcTranscriptCopyBtn').addEventListener('click', function() {
+  var sorted = Array.from(qcSelectedIndices).sort(function(a, b) { return a - b; });
+  var text = sorted.map(function(idx) { return qcTranscriptItems[idx].text; }).join(' ');
+  navigator.clipboard.writeText(text).then(function() { alert('Texto copiado para a area de transferencia!'); });
+});
+
+/* === EDITOR DE LEGENDAS CAPCUT === */
+var qcSubCards = [];
+document.getElementById('qcOpenSubEditorBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  showStatus('\u{1F4AC} Carregando transcricao da sequencia ativa...', 'info');
+  csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
+    var activeFolder = (keyRes && keyRes.indexOf('OK:') === 0) ? keyRes.substring(3) : '', cacheRoot = qcCacheRoot(eng), foundWords = null;
+    if (activeFolder && eng.fs.existsSync(cacheRoot)) {
+      var targetFolder = qcFindCacheFolder(eng, cacheRoot, activeFolder);
+      if (targetFolder) { try { var files = eng.fs.readdirSync(targetFolder); for (var i = 0; i < files.length; i++) { if (files[i].indexOf('transcript-') === 0 && files[i].indexOf('.json') !== -1) { foundWords = JSON.parse(eng.fs.readFileSync(eng.pathMod.join(targetFolder, files[i]), 'utf8')); if (foundWords && foundWords.length) break; } } } catch (e) {} }
+    }
+    function carregarGrupos(words) {
+      if (!words || !words.length) { showStatus('\u26A0\uFE0F Nenhuma transcricao em cache. Gere os cortes primeiro.', 'error'); return; }
+      var grupos = eng.srtMod.agruparEstiloCapCut(words, 3);
+      qcSubCards = grupos.map(function(g) { return { start: g.start, end: g.end, text: g.text }; });
+      document.getElementById('qcSubEditorModal').classList.add('open');
+      qcRenderSubEditorView(); showStatus('\u2714 Editor CapCut carregado para a sequencia ativa.', 'success');
+    }
+    if (foundWords && foundWords.length) { carregarGrupos(foundWords); }
+    else {
+      var preset = qcResolvePreset(eng); if (!preset) return;
+      var modelSel = document.getElementById('qcQuality').value;
+      showStatus('\u{1F3A4} Transcrevendo para o Editor CapCut...', 'info');
+      qcExportAndTranscribe(eng, preset, modelSel).then(function(res) { carregarGrupos(res.segments || []); }).catch(function(e) { showStatus('\u26A0\uFE0F Erro ao transcrever: ' + (e.message || e), 'error'); });
+    }
+  });
+});
+document.getElementById('qcCloseSubModal').addEventListener('click', function() { document.getElementById('qcSubEditorModal').classList.remove('open'); });
+function qcRenderSubEditorView() {
+  var container = document.getElementById('qcSubBody'); container.innerHTML = '';
+  qcSubCards.forEach(function(card, idx) {
+    var div = document.createElement('div'); div.className = 'sub-card';
+    var timeHeader = document.createElement('div'); timeHeader.className = 'sub-card-time';
+    timeHeader.innerHTML = '<span>#' + (idx + 1) + '  [' + qcHms(card.start) + ' -> ' + qcHms(card.end) + ']</span><span>' + Math.max(0.1, card.end - card.start).toFixed(1) + 's</span>';
+    var input = document.createElement('input'); input.type = 'text'; input.value = card.text; input.dataset.index = idx;
+    input.addEventListener('input', function() { var i = parseInt(this.dataset.index, 10); qcSubCards[i].text = this.value; });
+    input.addEventListener('keydown', function(e) {
+      var i = parseInt(this.dataset.index, 10), thisCard = qcSubCards[i]; if (!thisCard) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var pos = this.selectionStart, textBefore = this.value.substring(0, pos).trim() || '\u2026', textAfter = this.value.substring(pos).trim();
+        var midTime = thisCard.start + (thisCard.end - thisCard.start) * Math.min(1, Math.max(0, pos / Math.max(1, this.value.length))), oldEnd = thisCard.end;
+        thisCard.text = textBefore; thisCard.end = midTime; qcSubCards.splice(i + 1, 0, { start: midTime, end: oldEnd, text: textAfter || '\u2026' });
+        qcRenderSubEditorView(); setTimeout(function() { var inputs = container.querySelectorAll('input'); if (inputs[i + 1]) { inputs[i + 1].focus(); inputs[i + 1].setSelectionRange(0, 0); } }, 30);
+      } else if (e.key === 'Backspace' && this.selectionStart === 0 && this.selectionEnd === 0 && i > 0) {
+        e.preventDefault(); var prevCard = qcSubCards[i - 1], prevLen = prevCard.text.length;
+        prevCard.text = (prevCard.text + ' ' + thisCard.text).trim(); prevCard.end = thisCard.end; qcSubCards.splice(i, 1);
+        qcRenderSubEditorView(); setTimeout(function() { var inputs = container.querySelectorAll('input'); if (inputs[i - 1]) { inputs[i - 1].focus(); inputs[i - 1].setSelectionRange(prevLen, prevLen); } }, 30);
+      }
+    });
+    div.appendChild(timeHeader); div.appendChild(input); container.appendChild(div);
+  });
+}
+
+document.getElementById('qcSubSaveSrtBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return;
+  var srtContent = eng.srtMod.gerarSrtTexto(qcSubCards.map(function(c, i) { return { index: i + 1, start: c.start, end: c.end, text: c.text }; }));
+  csInterface.evalScript('qcProjectDir()', function(dirRes) {
+    var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
+    var srtPath = eng.pathMod.join(base, 'legendas_editadas.srt');
+    try { eng.fs.writeFileSync(srtPath, srtContent, 'utf8'); showStatus('\u2714 Legendas salvas em: legendas_editadas.srt', 'success'); csInterface.evalScript('qcImportLegendas("' + qcEscape(srtPath) + '")'); document.getElementById('qcSubEditorModal').classList.remove('open'); }
+    catch (e) { showStatus('Erro ao salvar .srt: ' + e.message, 'error'); }
+  });
+});
+
+document.getElementById('qcSubApplyMogrtBtn').addEventListener('click', function() {
+  var eng = qcLoadEngine(); if (!eng) return; var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
+  var textParam = eng.cfg.mogrt_text_param || 'Source Text';
+  var payload = { mogrt: mogrt, param: textParam, caps: qcSubCards.map(function(c) { return { s: c.start, e: c.end, t: c.text }; }) };
+  showStatus('\u{1F3A8} Inserindo graficos de legenda estilo CapCut...', 'info');
+  csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
+    if (res && res.indexOf('SUCCESS:') === 0) showStatus('\u2714 Graficos de legenda aplicados!', 'success'); else showStatus(res || 'Erro ao aplicar MOGRTs', 'error');
+    document.getElementById('qcSubEditorModal').classList.remove('open');
+  });
+});
+
+function qcSweepOrphanedTemp() {
+  if (typeof require === 'undefined') return;
+  try {
+    var fs = require('fs'), pathMod = require('path'), os = require('os'), tmp = os.tmpdir(), cutoff = Date.now() - 3 * 60 * 60 * 1000;
+    fs.readdirSync(tmp).forEach(function(n) { if (!/^qc-.*\.wav$/i.test(n)) return; var fp = pathMod.join(tmp, n); try { if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp); } catch (e) {} });
+  } catch (e) {}
+}
+
+/* === ABA ACABAMENTOS (REMOÇÃO DE RESPIROS & J-CUT) === */
+
+var lastSilenceBackup = null;
+var lastJCutBackup = null;
+
+function qcRefreshAcabamentosContext() {
+  csInterface.evalScript('qcGetTimelineContext()', function(resStr) {
+    try {
+      var res = JSON.parse(resStr);
+      if (res && res.ok && res.data) {
+        var seqNameEl = document.getElementById('qcAcSeqName');
+        if (seqNameEl) seqNameEl.textContent = res.data.sequenceName + ' (' + Math.round(res.data.durationSeconds) + 's)';
+        
+        var trackSelect = document.getElementById('qcAcTrackSelect');
+        if (trackSelect && res.data.audioTracks && res.data.audioTracks.length > 0) {
+          var curVal = trackSelect.value;
+          trackSelect.innerHTML = '';
+          for (var i = 0; i < res.data.audioTracks.length; i++) {
+            var t = res.data.audioTracks[i];
+            var opt = document.createElement('option');
+            opt.value = String(t.index);
+            opt.textContent = t.name + ' (' + t.clipCount + ' clipes)';
+            trackSelect.appendChild(opt);
+          }
+          var optAll = document.createElement('option');
+          optAll.value = '-1';
+          optAll.textContent = 'Mix Geral (Todas as faixas)';
+          trackSelect.appendChild(optAll);
+          if (curVal !== null && curVal !== '') trackSelect.value = curVal;
+        }
+      } else {
+        var seqNameEl2 = document.getElementById('qcAcSeqName');
+        if (seqNameEl2) seqNameEl2.textContent = 'Nenhuma sequência aberta';
+      }
+    } catch(e) {}
+  });
+}
+
+document.getElementById('qcAcRefreshSeqBtn').addEventListener('click', qcRefreshAcabamentosContext);
+
+// Presets de Ritmo
+function qcSetSilencePreset(thresh, minDur, pad, activeBtnId) {
+  document.getElementById('qcAcThreshold').value = thresh;
+  document.getElementById('qcAcThresholdVal').textContent = thresh + ' dB';
+  document.getElementById('qcAcMinDur').value = minDur;
+  document.getElementById('qcAcMinDurVal').textContent = minDur + ' ms';
+  document.getElementById('qcAcPadding').value = pad;
+  document.getElementById('qcAcPaddingVal').textContent = pad + ' ms';
+  ['qcPresetNatural','qcPresetRitmado','qcPresetRapido'].forEach(function(id) {
+    var b = document.getElementById(id);
+    if (b) b.classList.toggle('active', id === activeBtnId);
+  });
+}
+
+document.getElementById('qcPresetNatural').addEventListener('click', function() {
+  qcSetSilencePreset(-32, 600, 150, 'qcPresetNatural');
+});
+document.getElementById('qcPresetRitmado').addEventListener('click', function() {
+  qcSetSilencePreset(-30, 400, 100, 'qcPresetRitmado');
+});
+document.getElementById('qcPresetRapido').addEventListener('click', function() {
+  qcSetSilencePreset(-26, 250, 50, 'qcPresetRapido');
+});
+
+// Sliders de ajuste fino
+document.getElementById('qcAcThreshold').addEventListener('input', function() {
+  document.getElementById('qcAcThresholdVal').textContent = this.value + ' dB';
+});
+document.getElementById('qcAcMinDur').addEventListener('input', function() {
+  document.getElementById('qcAcMinDurVal').textContent = this.value + ' ms';
+});
+document.getElementById('qcAcPadding').addEventListener('input', function() {
+  document.getElementById('qcAcPaddingVal').textContent = this.value + ' ms';
+});
+
+// Quick frame buttons para J-Cut
+document.querySelectorAll('.qc-quick-frame').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.qc-quick-frame').forEach(function(b) {
+      b.classList.remove('active');
+      b.style.color = '';
+      b.style.borderColor = '';
+    });
+    this.classList.add('active');
+    this.style.color = 'var(--accent)';
+    this.style.borderColor = 'var(--accent)';
+    document.getElementById('qcAcJCutFrames').value = this.dataset.frames;
+  });
+});
+
+// Execução: Remover Respiros
+document.getElementById('qcAcRunSilenceBtn').addEventListener('click', async function() {
+  if (!qcComecar()) return;
+  var eng = qcLoadEngine(); if (!eng) return;
+  var preset = qcResolvePreset(eng); if (!preset) return;
+
+  var thresh = Number(document.getElementById('qcAcThreshold').value);
+  var minDur = Number(document.getElementById('qcAcMinDur').value);
+  var pad = Number(document.getElementById('qcAcPadding').value);
+  var mode = document.getElementById('qcAcModeSelect').value || 'ripple';
+  var trackIdx = Number(document.getElementById('qcAcTrackSelect').value || '0');
+  var doBackup = document.getElementById('qcAcBackupSilenceCheck').checked;
+
+  showStatus('🔍 Verificando timeline da sequência ativa...', 'info');
+
+  csInterface.evalScript('qcGetTimelineContext()', async function(ctxStr) {
+    var ctx;
+    try { ctx = JSON.parse(ctxStr); } catch(e) {}
+    if (!ctx || !ctx.ok || !ctx.data || !ctx.data.sequenceId) {
+      showStatus('⚠️ Nenhuma sequência ativa. Abra a timeline do seu corte no Premiere.', 'error');
+      qcSetBusy(false);
+      return;
+    }
+
+    var workingSeqId = ctx.data.sequenceId;
+
+    if (doBackup) {
+      showStatus('💾 Criando backup da sequência...', 'info');
+      await new Promise(function(resolve) {
+        csInterface.evalScript('qcDuplicateActiveSequence()', function(dupStr) {
+          try {
+            var dup = JSON.parse(dupStr);
+            if (dup && dup.ok && dup.data) {
+              lastSilenceBackup = dup.data;
+            }
+          } catch(e) {}
+          resolve();
+        });
+      });
+    }
+
+    var tempWav = eng.pathMod.join(qcCacheRoot(eng), 'ref_silence_' + Date.now() + '.wav');
+    showStatus('🎧 Exportando áudio da faixa para análise de respiros...', 'info');
+
+    var exportArgs = JSON.stringify({
+      trackIndex: trackIdx,
+      outputPath: tempWav,
+      presetPath: preset
+    });
+
+    csInterface.evalScript('qcExportSilenceRefAudio(' + JSON.stringify(exportArgs) + ')', async function(expStr) {
+      var expRes;
+      try { expRes = JSON.parse(expStr); } catch(e) {}
+      if (!expRes || !expRes.ok) {
+        showStatus('⚠️ Falha ao exportar áudio da timeline: ' + ((expRes && expRes.error) || expStr), 'error');
+        qcSetBusy(false);
+        return;
+      }
+
+      showStatus('🔬 Analisando oscilações e detectando pausas da fala...', 'info');
+      var regions = [];
+      try {
+        if (typeof AutoCutAudio === 'undefined') {
+          throw new Error('Módulo de análise de áudio (audio-analysis.js) não encontrado.');
+        }
+        var analysis = AutoCutAudio.analyzeWavFile(tempWav);
+        regions = AutoCutAudio.detectSilenceRegions(analysis.dbfs, 10, thresh, minDur, pad);
+      } catch(errAn) {
+        showStatus('⚠️ Erro na análise acústica: ' + errAn.message, 'error');
+        try { AutoCutAudio.deleteFile(tempWav); } catch(e) {}
+        qcSetBusy(false);
+        return;
+      }
+
+      try { AutoCutAudio.deleteFile(tempWav); } catch(e) {}
+
+      if (!regions || regions.length === 0) {
+        showStatus('Nenhum trecho de silêncio detectado em ' + thresh + ' dB. Ajuste o slider para -25 dB ou reduza a duração mínima.', 'info');
+        qcSetBusy(false);
+        return;
+      }
+
+      showStatus('⚡ Fatiando timeline e eliminando ' + regions.length + ' trechos de respiro...', 'info');
+
+      // 1) Razor Batches
+      var times = [];
+      for (var ri = 0; ri < regions.length; ri++) {
+        times.push(regions[ri][0] / 1000);
+        times.push(regions[ri][1] / 1000);
+      }
+      times = times.filter(function(v, idx, self) { return self.indexOf(v) === idx; });
+      times.sort(function(a, b) { return a - b; });
+
+      var RAZOR_BATCH = 24;
+      for (var rb = 0; rb < times.length; rb += RAZOR_BATCH) {
+        var rBatch = times.slice(rb, rb + RAZOR_BATCH);
+        var rArgs = JSON.stringify({
+          sequenceId: workingSeqId,
+          phase: 'razorTimes',
+          timesSeconds: rBatch
+        });
+        await new Promise(function(resRz) {
+          csInterface.evalScript('qcApplySilenceCuts(' + JSON.stringify(rArgs) + ')', resRz);
+        });
+      }
+
+      // 2) Lift Batches (se mode == lift ou ripple)
+      if (mode === 'lift' || mode === 'ripple') {
+        var LIFT_BATCH = 16;
+        for (var lb = 0; lb < regions.length; lb += LIFT_BATCH) {
+          var lBatch = regions.slice(lb, lb + LIFT_BATCH);
+          var lArgs = JSON.stringify({
+            sequenceId: workingSeqId,
+            phase: 'lift',
+            intervals: lBatch
+          });
+          await new Promise(function(resLf) {
+            csInterface.evalScript('qcApplySilenceCuts(' + JSON.stringify(lArgs) + ')', resLf);
+          });
+        }
+      }
+
+      // 3) Close Gaps (se mode == ripple)
+      if (mode === 'ripple') {
+        showStatus('🗜️ Fechando lacunas da timeline (ripple delete)...', 'info');
+        var cArgs = JSON.stringify({
+          sequenceId: workingSeqId,
+          phase: 'closeGaps',
+          intervals: regions
+        });
+        await new Promise(function(resCg) {
+          csInterface.evalScript('qcApplySilenceCuts(' + JSON.stringify(cArgs) + ')', resCg);
+        });
+      }
+
+      var totalSec = (regions.reduce(function(a, r) { return a + (r[1] - r[0]); }, 0) / 1000).toFixed(1);
+      showStatus('🎉 Sucesso! ' + regions.length + ' respiros removidos (~' + totalSec + 's eliminados da timeline).', 'success');
+
+      var sumEl = document.getElementById('qcAcSilenceSummary');
+      if (sumEl) {
+        sumEl.style.display = 'block';
+        sumEl.innerHTML = '✅ <b>' + regions.length + ' respiros cortados!</b> Duração reduzida em <b>~' + totalSec + 's</b>. Agora você pode aplicar o <b>J-Cut</b> abaixo!';
+      }
+
+      if (lastSilenceBackup) {
+        var undoBtn = document.getElementById('qcAcUndoSilenceBtn');
+        if (undoBtn) undoBtn.style.display = 'block';
+      }
+
+      qcSetBusy(false);
+      qcRefreshAcabamentosContext();
+    });
+  });
+});
+
+// Desfazer Remoção de Respiros
+document.getElementById('qcAcUndoSilenceBtn').addEventListener('click', function() {
+  if (!lastSilenceBackup) return;
+  showStatus('↩️ Restaurando sequência original do backup...', 'info');
+  csInterface.evalScript('qcRestoreSilenceBackup(' + JSON.stringify(JSON.stringify(lastSilenceBackup)) + ')', function(resStr) {
+    try {
+      var res = JSON.parse(resStr);
+      if (res && res.ok) {
+        showStatus('✅ Cortes de respiro desfeitos! Sequência original restaurada.', 'success');
+        document.getElementById('qcAcUndoSilenceBtn').style.display = 'none';
+        document.getElementById('qcAcSilenceSummary').style.display = 'none';
+        lastSilenceBackup = null;
+        qcRefreshAcabamentosContext();
+      } else {
+        showStatus('⚠️ Erro ao restaurar: ' + ((res && res.error) || resStr), 'error');
+      }
+    } catch(e) {
+      showStatus('⚠️ Erro ao restaurar: ' + e.message, 'error');
+    }
+  });
+});
+
+// Execução: Gerar J-Cuts
+document.getElementById('qcAcRunJCutBtn').addEventListener('click', function() {
+  if (!qcComecar()) return;
+  var frames = parseInt(document.getElementById('qcAcJCutFrames').value, 10);
+  if (isNaN(frames) || frames < 1) frames = 4;
+  var doBackup = document.getElementById('qcAcBackupJCutCheck').checked;
+
+  showStatus('🎬 Aplicando J-Cuts de ' + frames + ' frames nos cortes da timeline...', 'info');
+
+  csInterface.evalScript('qcGetTimelineContext()', async function(ctxStr) {
+    var ctx;
+    try { ctx = JSON.parse(ctxStr); } catch(e) {}
+    if (!ctx || !ctx.ok || !ctx.data || !ctx.data.sequenceId) {
+      showStatus('⚠️ Nenhuma sequência ativa. Abra a timeline do seu corte no Premiere.', 'error');
+      qcSetBusy(false);
+      return;
+    }
+
+    if (doBackup) {
+      await new Promise(function(resolve) {
+        csInterface.evalScript('qcDuplicateActiveSequence()', function(dupStr) {
+          try {
+            var dup = JSON.parse(dupStr);
+            if (dup && dup.ok && dup.data) {
+              lastJCutBackup = dup.data;
+            }
+          } catch(e) {}
+          resolve();
+        });
+      });
+    }
+
+    var jcutArgs = JSON.stringify({
+      step: 'all',
+      frames: frames
+    });
+
+    csInterface.evalScript('qcApplyJCuts(' + JSON.stringify(jcutArgs) + ')', function(resStr) {
+      qcSetBusy(false);
+      try {
+        var res = JSON.parse(resStr);
+        if (res && res.ok && res.data) {
+          var count = res.data.segmentCount || 0;
+          showStatus('🎬 J-Cuts aplicados com sucesso em ' + count + ' segmentos (' + frames + ' frames de sobreposição)!', 'success');
+
+          var sumEl = document.getElementById('qcAcJCutSummary');
+          if (sumEl) {
+            sumEl.style.display = 'block';
+            sumEl.innerHTML = '🎬 <b>' + count + ' segmentos com J-Cut aplicados!</b> O áudio das falas seguintes agora entra ' + frames + ' frames antes, suavizando o corte.';
+          }
+
+          if (lastJCutBackup) {
+            var undoBtn = document.getElementById('qcAcUndoJCutBtn');
+            if (undoBtn) undoBtn.style.display = 'block';
+          }
+        } else {
+          showStatus('⚠️ Não foi possível aplicar J-Cuts: ' + ((res && res.error) || resStr), 'error');
+        }
+      } catch(e) {
+        showStatus('⚠️ Falha ao executar J-Cuts: ' + e.message, 'error');
+      }
+    });
+  });
+});
+
+// Desfazer J-Cuts
+document.getElementById('qcAcUndoJCutBtn').addEventListener('click', function() {
+  if (!lastJCutBackup) return;
+  showStatus('↩️ Restaurando sequência anterior aos J-Cuts...', 'info');
+  csInterface.evalScript('qcRestoreJCutBackup(' + JSON.stringify(JSON.stringify(lastJCutBackup)) + ')', function(resStr) {
+    try {
+      var res = JSON.parse(resStr);
+      if (res && res.ok) {
+        showStatus('✅ J-Cuts desfeitos com sucesso! Sequência restaurada.', 'success');
+        document.getElementById('qcAcUndoJCutBtn').style.display = 'none';
+        document.getElementById('qcAcJCutSummary').style.display = 'none';
+        lastJCutBackup = null;
+        qcRefreshAcabamentosContext();
+      } else {
+        showStatus('⚠️ Erro ao restaurar: ' + ((res && res.error) || resStr), 'error');
+      }
+    } catch(e) {
+      showStatus('⚠️ Erro ao restaurar: ' + e.message, 'error');
+    }
+  });
+});
+
+window.addEventListener('load', function() {
+  qcRefreshSources();
+  qcRefreshBins();
+  qcSweepOrphanedTemp();
+  qcInitSettingsUI();
+  showStatus('Pronto. Abra a sequencia e escolha a acao desejada nas abas.', 'info');
+});
+</script>
+
+<!-- MODAL EDITOR DE TRANSCRICAO -->
+<div id="qcTranscriptModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 style="color:#10b981;">📝 Editor Interativo de Transcricao</h3>
+      <button id="qcCloseTranscriptModal" class="modal-close">✕</button>
+    </div>
+    <div class="modal-toolbar">
+      <select id="qcTranscriptSelect" style="flex:1;padding:7px 10px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:6px;"></select>
+      <div id="qcTranscriptStats" style="font-size:11px;color:#a7f3d0;font-weight:700;white-space:nowrap;">&#x23F1; 0.0s</div>
+    </div>
+    <div id="qcTranscriptBody" class="modal-body"></div>
+    <div class="modal-footer">
+      <input type="text" id="qcTranscriptCutName" value="Corte Selecionado" placeholder="Nome da sequencia" style="flex:1;padding:7px 10px;background:var(--card2);border:1px solid var(--line);color:#fff;border-radius:6px;">
+      <button id="qcTranscriptBuildBtn" style="background:#10b981;color:#052e16;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;">🎬 Criar Corte</button>
+      <button id="qcTranscriptCopyBtn" style="background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:600;">📋 Copiar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITOR DE LEGENDAS CAPCUT -->
+<div id="qcSubEditorModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 style="color:#38bdf8;">💬 Editor de Legendas (Estilo CapCut)</h3>
+      <button id="qcCloseSubModal" class="modal-close">✕</button>
+    </div>
+    <div class="modal-toolbar" style="font-size:11px;color:var(--muted);">
+      💡 <b style="color:var(--txt);">Enter</b> divide a legenda &middot; <b style="color:var(--txt);">Backspace</b> no inicio une com a anterior
+    </div>
+    <div id="qcSubBody" class="modal-body" style="display:flex;flex-direction:column;gap:6px;"></div>
+    <div class="modal-footer">
+      <button id="qcSubSaveSrtBtn" class="btn-sky" style="flex:1;">💾 Salvar .SRT</button>
+      <button id="qcSubApplyMogrtBtn" class="btn-sky2" style="flex:1;">🎨 Aplicar MOGRTs</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
