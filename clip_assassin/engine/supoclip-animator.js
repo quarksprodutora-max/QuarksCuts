@@ -4,7 +4,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
+const os = require('os');
+const configStore = require('./config-store.js');
 
 const STYLES = {
   hormozi: {
@@ -85,17 +87,14 @@ const STYLES = {
 };
 
 function formatAssTime(seconds) {
-  seconds = Math.max(0, parseFloat(seconds) || 0);
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.floor(Math.round((seconds - Math.floor(seconds)) * 100));
-  const pad = (n, w) => String(n).padStart(w, '0');
-  return `${h}:${pad(m, 2)}:${pad(s, 2)}.${pad(cs, 2)}`;
+  const total = Math.max(0, Math.round(Number(seconds) * 100));
+  if (!Number.isFinite(total)) throw new Error('Tempo ASS inválido.');
+  const pad = n => String(n).padStart(2, '0');
+  return Math.floor(total / 360000) + ':' + pad(Math.floor(total / 6000) % 60) + ':' + pad(Math.floor(total / 100) % 60) + '.' + pad(total % 100);
 }
 
 function escapeAss(text) {
-  return String(text || '').replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}');
+  return String(text || '').replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/[\r\n]+/g, ' ');
 }
 
 /**
@@ -177,36 +176,41 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 /**
  * Renderiza um vídeo de sobreposição com fundo transparente (ProRes 4444 com Alpha)
  */
-function renderTransparentMov(assPath, outMovPath, duration, width, height, fps) {
-  return new Promise((resolve, reject) => {
-    width = width || 1080;
-    height = height || 1920;
-    fps = fps || 30;
-    duration = Math.max(1, parseFloat(duration) || 5);
-
-    // Escapa o caminho do ASS para a sintaxe de filtro do FFmpeg no Windows
-    const normAss = assPath.replace(/\\/g, '/');
-    const escapedAss = normAss.replace(/:/g, '\\:');
-
-    const cmd = `ffmpeg -y -f lavfi -i "color=c=black@0.0:size=${width}x${height}:rate=${fps}:duration=${duration},format=rgba" -vf "ass='${escapedAss}'" -c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le "${outMovPath}"`;
-
-    exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) {
-        // Fallback para QuickTime Animation (qtrle) com alpha caso prores_ks falhe
-        const cmdRle = `ffmpeg -y -f lavfi -i "color=c=black@0.0:size=${width}x${height}:rate=${fps}:duration=${duration},format=rgba" -vf "ass='${escapedAss}'" -c:v qtrle "${outMovPath}"`;
-        exec(cmdRle, (errRle) => {
-          if (errRle) return reject(new Error('Falha ao renderizar overlay com FFmpeg: ' + (err.message || err)));
-          resolve(outMovPath);
-        });
-        return;
-      }
-      resolve(outMovPath);
-    });
+function runEncoder(binary, args, cwd) {
+  return new Promise(function(resolve, reject) {
+    let stderr = '';
+    const child = spawn(binary, args, {cwd:cwd, windowsHide:true, shell:false});
+    child.stderr.on('data', d => { stderr = (stderr + d.toString()).slice(-6000); });
+    child.stdout.on('data', function() {});
+    child.on('error', e => reject(new Error('Não foi possível executar FFmpeg: ' + e.message)));
+    child.on('close', code => code === 0 ? resolve() : reject(new Error('FFmpeg encerrou com código ' + code + ': ' + stderr)));
   });
 }
 
-module.exports = {
-  STYLES,
-  buildAssSubtitles,
-  renderTransparentMov
-};
+async function renderTransparentMov(assPath, outMovPath, duration, width, height, fps) {
+  width = width || 1080; height = height || 1920; fps = fps || 30;
+  if (![duration,width,height,fps].every(Number.isFinite) || duration <= 0 || width < 1 || height < 1 || fps <= 0) throw new Error('Dimensão, duração ou FPS inválido.');
+  const cfg = configStore.loadConfig();
+  const binary = configStore.resolveBinary(cfg.ffmpeg_path, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg') || 'ffmpeg';
+  // Nome relativo controlado evita escaping frágil de caminhos no filtro (aspas, :, acentos).
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'qc-overlay-'));
+  const target = path.resolve(outMovPath);
+  const common = ['-y','-nostdin','-f','lavfi','-i',
+    'color=c=black@0.0:size=' + width + 'x' + height + ':rate=' + fps + ':duration=' + duration + ',format=rgba',
+    '-vf','ass=filename=captions.ass:alpha=1','-an'];
+  try {
+    fs.copyFileSync(assPath, path.join(work, 'captions.ass'));
+    try {
+      await runEncoder(binary, common.concat(['-c:v','prores_ks','-profile:v','4','-pix_fmt','yuva444p10le',target]), work);
+    } catch(first) {
+      try { await runEncoder(binary, common.concat(['-c:v','qtrle','-pix_fmt','argb',target]), work); }
+      catch(second) { throw new Error('Falha nos dois codecs de overlay. ' + first.message + '\n' + second.message); }
+    }
+    if (!fs.existsSync(target) || fs.statSync(target).size === 0) throw new Error('FFmpeg não gerou um overlay válido.');
+    return target;
+  } finally {
+    try { fs.unlinkSync(path.join(work, 'captions.ass')); fs.rmdirSync(work); } catch(e) {}
+  }
+}
+
+module.exports = {STYLES,buildAssSubtitles,renderTransparentMov,formatAssTime};

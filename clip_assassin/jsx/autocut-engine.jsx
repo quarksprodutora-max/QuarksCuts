@@ -1,4 +1,5 @@
-var AutoCut = AutoCut || {};
+$.global.AutoCut = $.global.AutoCut || {};
+var AutoCut = $.global.AutoCut;
 
 AutoCut._perfOn = function () {
   return false;
@@ -2364,7 +2365,7 @@ AutoCut._tempRefWavPath = function () {
 AutoCut.exportReferenceTrack = function (jsonStr) {
   return AutoCut._wrap(function () {
     var args = AutoCut._parse(jsonStr);
-    var seq = AutoCut._activeSequence();
+    var seq = AutoCut._assertActiveSequence(args.sequenceId);
     var trackIndex = Number(args.trackIndex);
     var mixAll = trackIndex === -1;
     var trackCount = AutoCut._collectionCount(seq.audioTracks, ["numTracks", "numItems", "length"]);
@@ -2429,14 +2430,6 @@ AutoCut._duplicateViaClone = function (seq, backupName) {
     }
   }
   if (!cloneSeq) {
-    for (i = 0; i < app.project.sequences.numSequences; i += 1) {
-      var maybe = app.project.sequences[i];
-      if (maybe.sequenceID !== originalId && String(maybe.name).indexOf(seq.name) !== -1) {
-        cloneSeq = maybe;
-      }
-    }
-  }
-  if (!cloneSeq) {
     return null;
   }
   AutoCut._renameSequence(cloneSeq, backupName);
@@ -2462,12 +2455,8 @@ AutoCut._duplicateViaMenu = function (seq, backupName) {
     idsBefore[app.project.sequences[i].sequenceID] = true;
   }
   var item = AutoCut._projectItemForSequence(seq);
-  if (item && AutoCut._hasFn(item, "select")) {
-    try {
-      app.project.rootItem.select ? null : null;
-      item.setSelected(true, true);
-    } catch (eSel) {}
-  }
+  if (!item || !AutoCut._hasFn(item, "setSelected")) return null;
+  try { item.setSelected(true, true); } catch (eSel) { return null; }
   app.executeCommand(commandId);
   var cloneSeq = null;
   for (i = 0; i < app.project.sequences.numSequences; i += 1) {
@@ -2536,45 +2525,8 @@ AutoCut._duplicateViaQE = function (seq, backupName) {
   return { seq: cloneSeq, probed: { project: methods, sequence: seqMethods } };
 };
 
-AutoCut._duplicateManual = function (seq, backupName) {
-  var newSeq = null;
-  if (AutoCut._hasFn(app.project, "createNewSequence")) {
-    try {
-      newSeq = app.project.createNewSequence(backupName);
-    } catch (e1) {}
-  }
-  if (!newSeq) {
-    throw new Error("createNewSequence não está disponível para o fallback manual de backup.");
-  }
-  AutoCut._renameSequence(newSeq, backupName);
-  AutoCut._forEachTrack(seq, function (track, kind, trackIndex) {
-    var clips = track.clips;
-    var i;
-    for (i = 0; i < clips.numItems; i += 1) {
-      var clip = clips[i];
-      if (!clip.projectItem) {
-        continue;
-      }
-      var startTicks = clip.start.ticks || AutoCut._ticksFromSeconds(AutoCut._secondsFromTime(clip.start));
-      try {
-        if (kind === "video") {
-          newSeq.overwriteClip(clip.projectItem, startTicks, trackIndex, -1);
-        } else {
-          newSeq.overwriteClip(clip.projectItem, startTicks, -1, trackIndex);
-        }
-      } catch (eIns) {
-        try {
-          if (kind === "video") {
-            newSeq.videoTracks[trackIndex].overwriteClip(clip.projectItem, AutoCut._secondsFromTime(clip.start));
-          } else {
-            newSeq.audioTracks[trackIndex].overwriteClip(clip.projectItem, AutoCut._secondsFromTime(clip.start));
-          }
-        } catch (e2) {}
-      }
-    }
-  });
-  AutoCut._activateSequence(seq);
-  return newSeq;
+AutoCut._duplicateManual = function () {
+  throw new Error('Backup manual incompleto desabilitado. É necessária uma duplicação nativa da sequência.');
 };
 
 AutoCut.duplicateActiveSequence = function () {
@@ -2603,17 +2555,16 @@ AutoCut.duplicateActiveSequence = function () {
       }
     }
     if (!cloneSeq) {
-      cloneSeq = AutoCut._duplicateManual(seq, backupName);
-      if (cloneSeq) {
-        strategy = "manual-rebuild";
-      }
-    }
-    if (!cloneSeq) {
       throw new Error("Não foi possível duplicar a sequência para backup. Cortes abortados.");
     }
     var confirmed = AutoCut._findSequenceById(cloneSeq.sequenceID);
     if (!confirmed) {
       throw new Error("O backup não pôde ser confirmado no projeto. Cortes abortados.");
+    }
+    if (typeof qcSequenceCacheState === 'function') {
+      var sourceState = qcSequenceCacheState(seq, {}), backupState = qcSequenceCacheState(confirmed, {});
+      sourceState[0] = ''; backupState[0] = '';
+      if (JSON.stringify(sourceState) !== JSON.stringify(backupState)) throw new Error('O conteúdo do backup não corresponde à sequência original. Cortes abortados.');
     }
     var original = AutoCut._findSequenceById(seq.sequenceID) || seq;
     AutoCut._activateSequence(original);
@@ -2626,6 +2577,8 @@ AutoCut.duplicateActiveSequence = function () {
       backupName: confirmed.name,
       backupSequenceId: confirmed.sequenceID,
       originalSequenceId: original.sequenceID,
+      originalName: original.name,
+      workingSequenceId: original.sequenceID,
       strategy: strategy,
       qeProbe: qeProbe
     });
@@ -2744,27 +2697,9 @@ AutoCut.restoreBackup = function (jsonStr) {
     if (!backup) {
       throw new Error("A sequência de backup não foi encontrada. Desfazer abortado.");
     }
-    var working = AutoCut._findSequenceById(args.workingSequenceId);
     var originalName = args.originalName || String(backup.name).replace(/ - Backup$/, "");
-
-    AutoCut._activateSequence(backup);
-    if (working && String(working.sequenceID) !== String(backup.sequenceID)) {
-      try {
-        if (AutoCut._hasFn(app.project, "deleteSequence")) {
-          app.project.deleteSequence(working);
-        } else {
-          var item = AutoCut._projectItemForSequence(working);
-          if (item && AutoCut._hasFn(item, "remove")) {
-            item.remove(false, true);
-          } else {
-            throw new Error("deleteSequence indisponível.");
-          }
-        }
-      } catch (eDel) {
-        throw new Error("Não foi possível apagar a sequência em edição: " + eDel.toString());
-      }
-    }
-    AutoCut._renameSequence(backup, originalName);
+    // Não apaga sequências: elas podem estar referenciadas por nests em outras timelines.
+    AutoCut._renameSequence(backup, originalName + ' - Restaurada');
     var restored = AutoCut._findSequenceById(backup.sequenceID) || backup;
     AutoCut._activateSequence(restored);
     return AutoCut._ok({

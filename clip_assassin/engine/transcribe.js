@@ -1,6 +1,10 @@
-﻿// Transcrição offline dentro do painel CEP (Node habilitado no manifest).
+﻿// ============================================================================
+// QUARKS CUTS — MOTOR DE TRANSCRIÇÃO OFFLINE (transcribe.js)
+// Transcrição offline dentro do painel CEP (Node habilitado no manifest).
 // Fluxo: ffmpeg (extrai WAV 16kHz mono) -> whisper-cli.exe (whisper.cpp, -oj)
-// -> parseia o JSON de saída em segmentos { start, end, text } (em segundos).
+// ou faster-whisper (fw-words.exe) -> parseia o JSON de saída em segmentos
+// { start, end, text } (em segundos, nível palavra) com filtro anti-alucinação.
+// ============================================================================
 //
 // Binários esperados (autocontidos) em clip_assassin/bin/ — ver bin/README.md.
 // Caminhos podem ser sobrescritos em engine/config.json.
@@ -14,13 +18,7 @@ const { qcLog } = require('./log.js');
 const ENGINE_DIR = __dirname;
 const BIN_DIR = path.join(ENGINE_DIR, '..', 'bin');
 
-function loadConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(ENGINE_DIR, 'config.json'), 'utf8'));
-  } catch (e) {
-    return {};
-  }
-}
+function loadConfig() { return require('./config-store.js').loadConfig(); }
 
 // Resolve um binário do config: caminho ABSOLUTO usa direto; caminho RELATIVO
 // é resolvido dentro de bin/ (bundle portável). String vazia ou caminho inválido

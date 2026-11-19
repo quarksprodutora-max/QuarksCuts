@@ -1,4 +1,26 @@
 <!DOCTYPE html>
+<!-- ==========================================================================
+  QUARKS CUTS — INTERFACE PRINCIPAL DO PAINEL CEP (index.html)
+  [MELHORIAS APLICADAS E COMENTADAS NESTA VERSÃO]:
+  1) [MELHORIA 1 - Pipeline Completo de Legendas]: `qcPreparaLegenda` e
+     `qcProcessBatchItem` agora executam `corrigirPalavras` (pontuação pré-agrupamento
+     quando o Whisper vem sem pontuação), `mergeShortCaptions` (elimina legendas
+     piscantes < 0.55s) e `capitalizeCaptions` (maiúsculas automáticas pós-ponto).
+  2) [MELHORIA 2 - Ordem Decrescente Estrita nos Cortes de Silêncio]: Em
+     `qcAcRunSilenceBtn`, os lotes de `razorTimes` e `lift` agora são ordenados
+     do FIM para o INÍCIO da timeline (`b - a`), eliminando desvios de frame.
+  3) [MELHORIA 3 - Resolução Dinâmica no SupoClip (9:16 vs 16:9)]: O gerador de
+     legendas animadas `.mov` (`qcLegendaAnimadaBtn`) agora respeita o formato
+     selecionado (`1080x1920` para vertical e `1920x1080` para horizontal 16:9).
+  4) [MELHORIA 4 - Auto-Calibração do Nível de Silêncio (Noise Floor)]: Adicionado
+     o modo "🎯 Auto (Ruído)" e checkbox de calibração automática usando
+     `AutoCutAudio.suggestThreshold(analysis.dbfs)`.
+  5) [MELHORIA 5 - Proteção contra Quebra de String no evalScript (`qcEscape`)]:
+     `qcEscape` agora escapa `\n` e `\r`, e `qcWritePromoReport` não faz mais
+     duplo escape nos títulos dos capítulos do YouTube.
+  6) [MELHORIA 6 - Sincronia dos Modelos Gemini no Dropdown]: Lista de modelos
+     alinhada com o fallback automático do `gemini-cortes.js`.
+=========================================================================== -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -123,6 +145,7 @@
 <body>
 
 <div class="header">
+  <span id="qcMcpBadge" style="display:none;font-size:10px;font-weight:700;padding:3px 8px;border-radius:12px;background:#064e3b;color:#34d399;border:1px solid #059669;margin-left:auto;align-items:center;">🟢 MCP Ativo</span>
   <div class="logo"><img src="./Icone%20Quarks%20Podcast%20Branco.png" alt="Quarks"></div>
   <div class="header-text">
     <div class="title">QUARKS CUTS</div>
@@ -202,8 +225,13 @@
     <div style="margin-bottom:8px;">
       <label class="lbl">Ritmo da Montagem</label>
       <select id="qcModoMontagem">
+        <!-- VERSÃO ANTERIOR:
         <option value="jumpcuts" selected>✂️ Montagem Dinâmica (2 a 8 partes com Gancho Inicial — Viral)</option>
         <option value="linear">📼 Take Contínuo (Trecho linear único com contexto completo)</option>
+        -->
+        <option value="jumpcuts" selected>✂️ Montagem Dinâmica (2 a 8 partes com Gancho Inicial — Shorts/Viral)</option>
+        <option value="linear">📼 Take Contínuo (Trecho linear único curto)</option>
+        <option value="tubacast">🎬 Cortes de Podcast / TubaCast (Horizontal 16:9 — 8 a 15 min)</option>
       </select>
     </div>
     <div id="qcCustomPromptWrap" style="display:none;margin-bottom:9px;">
@@ -290,14 +318,14 @@
       </div>
     </div>
     <div class="flex-row" style="margin-bottom:0;">
-      <button id="qcLegendaAnimadaBtn" class="btn-amber btn-block">✨ Gerar Legenda Animada (Trilha V2)</button>
+      <button id="qcLegendaAnimadaBtn" class="btn-amber btn-block">✨ Gerar Legenda Animada</button>
       <button id="qcLegendaBtn" class="btn-sky btn-block">💬 Gerar .SRT</button>
     </div>
     <button id="qcLegendaTimelineBtn" class="btn-teal btn-block mt-6">🎬 Inserir .SRT na Timeline Ativa (00:00:00:00 com .prtextstyle)</button>
     <button id="qcMogrtBtn" class="btn-sky2 btn-block mt-6">🎨 Legenda estilizada — MOGRT na timeline</button>
     <button id="qcMogrtSrtBtn" class="btn-ghost btn-block mt-6">🎨 MOGRTs a partir de um .srt ajustado...</button>
     <div class="hint-footer mt-8">
-      ✨ <b>Legenda Animada SupoClip:</b> Renderiza em ~2 segundos com canal alpha (ProRes 4444) e insere direto na trilha <b>V2</b> da timeline!
+      ✨ <b>Legenda Animada SupoClip:</b> Gera vídeo com transparência e insere em uma <b>nova trilha de vídeo</b>. O tempo depende da duração e resolução.
     </div>
   </div>
 
@@ -392,6 +420,7 @@
         <button type="button" id="qcPresetNatural" class="btn-seg-item">Natural</button>
         <button type="button" id="qcPresetRitmado" class="btn-seg-item active">Ritmado</button>
         <button type="button" id="qcPresetRapido" class="btn-seg-item">Rápido</button>
+        <button type="button" id="qcPresetAutoNoise" class="btn-seg-item" title="Calcula automaticamente o nível de silêncio em dB medindo o piso de ruído do microfone">🎯 Auto</button>
       </div>
     </div>
 
@@ -401,6 +430,10 @@
         <span id="qcAcThresholdVal" class="range-val">-30 dB</span>
       </div>
       <input type="range" id="qcAcThreshold" min="-60" max="0" step="1" value="-30">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--accent-l);margin-bottom:8px;cursor:pointer;">
+        <input type="checkbox" id="qcAcAutoThreshCheck" style="accent-color:var(--accent);">
+        🎯 Auto-calibrar dB pelo piso de ruído do microfone (Noise Floor)
+      </label>
     </div>
 
     <div class="grid" style="margin-bottom:4px;">
@@ -525,10 +558,53 @@
   <div id="status" class="info">Pronto. Abra a sequência e escolha a ação desejada nas abas acima.</div>
 </div>
 
+<!-- MODAL EDITOR DE TRANSCRICAO -->
+<div id="qcTranscriptModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 style="color:#10b981;">📝 Editor Interativo de Transcricao</h3>
+      <button id="qcCloseTranscriptModal" class="modal-close">✕</button>
+    </div>
+    <div class="modal-toolbar">
+      <select id="qcTranscriptSelect" style="flex:1;padding:7px 10px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:6px;"></select>
+      <div id="qcTranscriptStats" style="font-size:11px;color:#a7f3d0;font-weight:700;white-space:nowrap;">&#x23F1; 0.0s</div>
+    </div>
+    <div id="qcTranscriptBody" class="modal-body"></div>
+    <div class="modal-footer">
+      <input type="text" id="qcTranscriptCutName" value="Corte Selecionado" placeholder="Nome da sequencia" style="flex:1;padding:7px 10px;background:var(--card2);border:1px solid var(--line);color:#fff;border-radius:6px;">
+      <button id="qcTranscriptBuildBtn" style="background:#10b981;color:#052e16;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;">🎬 Criar Corte</button>
+      <button id="qcTranscriptCopyBtn" style="background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:600;">📋 Copiar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITOR DE LEGENDAS CAPCUT -->
+<div id="qcSubEditorModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 style="color:#38bdf8;">💬 Editor de Legendas (Estilo CapCut)</h3>
+      <button id="qcCloseSubModal" class="modal-close">✕</button>
+    </div>
+    <div class="modal-toolbar" style="font-size:11px;color:var(--muted);">
+      💡 <b style="color:var(--txt);">Enter</b> divide a legenda &middot; <b style="color:var(--txt);">Backspace</b> no inicio une com a anterior
+    </div>
+    <div id="qcSubBody" class="modal-body" style="display:flex;flex-direction:column;gap:6px;"></div>
+    <div class="modal-footer">
+      <button id="qcSubSaveSrtBtn" class="btn-sky" style="flex:1;">💾 Salvar .SRT</button>
+      <button id="qcSubApplySrtBtn" class="btn-teal" style="flex:1;">Inserir SRT na timeline</button>
+      <button id="qcSubApplyMogrtBtn" class="btn-sky2" style="flex:1;">🎨 Aplicar MOGRTs</button>
+    </div>
+  </div>
+</div>
+
+
 <script type="text/javascript" src="./CSInterface.js"></script>
 <script type="text/javascript" src="./audio-analysis.js"></script>
+<script type="text/javascript" src="./engine/panel-bridge.js"></script>
+<script type="text/javascript" src="./engine/mcp-server.js"></script>
 <script type="text/javascript">
 var csInterface = new CSInterface();
+function qcHostCall(name, args) { return QuarksHostBridge.call(csInterface, name, args); }
 var qcFileLog = null;
 function qcPanelLog(msg) {
   try {
@@ -554,7 +630,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
 });
 
 var qcBusy = false;
-var QC_BOTOES = ['qcRefreshBtn','qcLoadBtn','qcGenBtn','qcLegendaBtn','qcLegendaTimelineBtn','qcLegendaAnimadaBtn','qcBatchLegendasBtn','qcBatchApplyExistingSrtBtn','qcBrowseTextStyleBtn','qcRefreshBinsBtn','qcMogrtBtn','qcMogrtSrtBtn','qcUnnestBtn','qcPodcastBtn','qcHookApenasBtn','qcAcRunSilenceBtn','qcAcRunJCutBtn','qcAcRefreshSeqBtn'];
+var QC_BOTOES = ['qcRefreshBtn','qcLoadBtn','qcGenBtn','qcLegendaBtn','qcLegendaTimelineBtn','qcLegendaAnimadaBtn','qcBatchLegendasBtn','qcBatchApplyExistingSrtBtn','qcBrowseTextStyleBtn','qcRefreshBinsBtn','qcMogrtBtn','qcMogrtSrtBtn','qcUnnestBtn','qcPodcastBtn','qcHookApenasBtn','qcAcRunSilenceBtn','qcAcRunJCutBtn','qcAcRefreshSeqBtn','qcOpenSubEditorBtn','qcSubSaveSrtBtn','qcSubApplySrtBtn','qcSubApplyMogrtBtn','qcAcUndoSilenceBtn','qcAcUndoJCutBtn','qcTranscriptBuildBtn','qcClearCacheBtn'];
 function qcSetBusy(b) {
   qcBusy = b;
   for (var i = 0; i < QC_BOTOES.length; i++) { var el = document.getElementById(QC_BOTOES[i]); if (el) el.disabled = b; }
@@ -581,7 +657,15 @@ function parseSrtSeconds(s) {
   return h * 3600 + mi * 60 + se + (ms || 0) / 1000;
 }
 function qcToSeconds(v) { return (typeof v === 'number') ? v : parseSrtSeconds(v); }
-function qcEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+// [MELHORIA 5]: Escapa também quebras de linha (\n e \r) para evitar SyntaxError
+// quando strings multilinhas (como capítulos do YouTube) são passadas ao evalScript.
+function qcEscape(s) {
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
+}
 function qcCutName(num, totalSec, title) {
   var nn = (num < 10 ? '0' + num : '' + num);
   var t = String(title || ('Corte ' + num)).replace(/[^\w \-\xC0-\xFF]/g, '').substring(0, 60);
@@ -638,10 +722,8 @@ function qcBuildNext(clips, idx, okCount, errs, srcIdx, aspect, onDone) {
 }
 
 function qcGetUserConfigPath(eng) {
-  var appData = process.env.LOCALAPPDATA || eng.os.tmpdir();
-  var userDir = eng.pathMod.join(appData, 'QuarksCuts');
-  if (!eng.fs.existsSync(userDir)) eng.fs.mkdirSync(userDir, { recursive: true });
-  return eng.pathMod.join(userDir, 'config.json');
+  var store = require(csInterface.getSystemPath(SystemPath.EXTENSION) + '/engine/config-store.js');
+  return eng.pathMod.join(store.userDir(), 'config.json');
 }
 
 function qcLoadEngine() {
@@ -652,16 +734,9 @@ function qcLoadEngine() {
     var gem = require(extRoot + '/engine/gemini-cortes.js');
     var tr = require(extRoot + '/engine/transcribe.js');
     var cfgPath = extRoot + '/engine/config.json';
-    var baseCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    
-    // Suporte prioritário ao config do usuário em LocalAppData
+    var store = require(extRoot + '/engine/config-store.js');
+    var baseCfg = store.loadConfig();
     var userCfgPath = qcGetUserConfigPath({ fs: fs, pathMod: pathMod, os: os });
-    if (fs.existsSync(userCfgPath)) {
-      try {
-        var userCfg = JSON.parse(fs.readFileSync(userCfgPath, 'utf8'));
-        baseCfg = Object.assign({}, baseCfg, userCfg);
-      } catch (e1) {}
-    }
 
     var saMod = null;
     try {
@@ -684,7 +759,7 @@ function qcLoadEngine() {
 function qcSaveUserConfig(eng, newObj) {
   var userCfg = Object.assign({}, eng.cfg, newObj);
   try {
-    eng.fs.writeFileSync(eng.userCfgPath, JSON.stringify(userCfg, null, 2), 'utf8');
+    require(eng.extRoot + '/engine/config-store.js').saveConfig(newObj);
     eng.cfg = userCfg;
     return true;
   } catch (e) {
@@ -718,8 +793,7 @@ function qcResolvePreset(eng) {
 }
 
 function qcCacheRoot(eng) {
-  var base = process.env.LOCALAPPDATA || eng.os.tmpdir();
-  var root = eng.pathMod.join(base, 'QuarksCuts', 'cache');
+  var root = eng.pathMod.join(require(eng.extRoot + '/engine/config-store.js').userDir(), 'cache');
   if (!eng.fs.existsSync(root)) eng.fs.mkdirSync(root, { recursive: true });
   return root;
 }
@@ -727,10 +801,6 @@ function qcFindCacheFolder(eng, cacheRoot, activeFolder) {
   if (!activeFolder || !eng.fs.existsSync(cacheRoot)) return null;
   var exact = eng.pathMod.join(cacheRoot, activeFolder);
   if (eng.fs.existsSync(exact)) return exact;
-  if (activeFolder.indexOf('__') !== -1) {
-    var prefix = activeFolder.split('__')[0] + '__', folders = eng.fs.readdirSync(cacheRoot);
-    for (var i = 0; i < folders.length; i++) { if (folders[i].indexOf(prefix) === 0) return eng.pathMod.join(cacheRoot, folders[i]); }
-  }
   return null;
 }
 function qcRmrf(fs, pathMod, p) {
@@ -746,35 +816,48 @@ function qcDirSize(fs, pathMod, p) {
   var total = 0; fs.readdirSync(p).forEach(function(name) { total += qcDirSize(fs, pathMod, pathMod.join(p, name)); }); return total;
 }
 
-function qcExportAndTranscribe(eng, preset, modelSel) {
-  return new Promise(function(resolve, reject) {
-    csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
-      if (!keyRes || keyRes.indexOf('OK:') !== 0) { reject(new Error(keyRes || 'Nao achei a sequencia ativa.')); return; }
-      var activeFolder = keyRes.substring(3), cacheRoot = qcCacheRoot(eng);
-      var foundDir = qcFindCacheFolder(eng, cacheRoot, activeFolder);
-      var cacheDir = foundDir ? foundDir : eng.pathMod.join(cacheRoot, activeFolder);
-      if (!eng.fs.existsSync(cacheDir)) eng.fs.mkdirSync(cacheDir, { recursive: true });
-      var modelPath = eng.resolveModelPath(modelSel);
-      var modelBase = modelPath ? eng.pathMod.basename(modelPath).replace(/\.bin$/i, '') : 'default';
-      var transcriptFile = eng.pathMod.join(cacheDir, 'transcript-' + modelBase + '.json');
-      var audioFile = eng.pathMod.join(cacheDir, 'audio.wav');
-      if (eng.fs.existsSync(transcriptFile)) {
-        try { var cachedSegs = JSON.parse(eng.fs.readFileSync(transcriptFile, 'utf8')); showStatus('\u267B\uFE0F Reaproveitando transcricao ja feita (cache).', 'info'); resolve({ segments: cachedSegs, language: 'auto' }); return; }
-        catch (e) {}
-      }
-      function transcreverDe(mediaPath) {
-        showStatus('\u{1F3A4} Transcrevendo... (Whisper offline em andamento)', 'info');
-        eng.transcribe(mediaPath, { onProgress: function(m) { showStatus('\u{1F3A4} ' + m, 'info'); }, model: modelSel || undefined })
-          .then(function(res) { try { eng.fs.writeFileSync(transcriptFile, JSON.stringify(res.segments)); } catch (e) {} resolve(res); }).catch(reject);
-      }
-      if (eng.fs.existsSync(audioFile)) { showStatus('\u267B\uFE0F Reaproveitando audio ja exportado (cache).', 'info'); transcreverDe(audioFile); return; }
-      showStatus('\u{1F39A}\uFE0F Exportando o audio da sequencia ativa...', 'info');
-      csInterface.evalScript('qcExportActiveAudio("' + qcEscape(preset) + '","' + qcEscape(audioFile) + '")', function(expRes) {
-        if (!expRes || expRes.indexOf('OK:') !== 0) { reject(new Error(expRes || 'Falha ao exportar o audio.')); return; }
-        transcreverDe(expRes.substring(3));
-      });
+async function qcExportAndTranscribe(eng, preset, modelSel) {
+  var activeFolder = await qcHostCall('qcActiveCacheKey');
+  var ctx = await qcHostCall('qcGetTimelineContext');
+  var cacheDir = eng.pathMod.join(qcCacheRoot(eng), activeFolder);
+  eng.fs.mkdirSync(cacheDir, {recursive:true});
+  var modelPath = eng.resolveModelPath(modelSel), modelStat = '';
+  if (modelPath) { var st = eng.fs.statSync(modelPath); modelStat = st.size + ':' + st.mtimeMs; }
+  var signature = JSON.stringify([modelSel || 'default', modelPath, modelStat, eng.cfg.whisper_language || 'auto', eng.cfg.whisper_cli_path, eng.cfg.fw_words_path, preset, 2]);
+  var modelKey = require('crypto').createHash('sha256').update(signature).digest('hex').slice(0,24);
+  var transcriptFile = eng.pathMod.join(cacheDir, 'transcript-' + modelKey + '.json');
+  var audioFile = eng.pathMod.join(cacheDir, 'audio.wav');
+  function validWords(words) {
+    return Array.isArray(words) && words.length && words.every(function(w) {
+      return w && Number.isFinite(w.start) && Number.isFinite(w.end) && w.start >= 0 && w.end > w.start && typeof w.text === 'string';
     });
-  });
+  }
+  if (eng.fs.existsSync(transcriptFile)) {
+    try {
+      var cached = JSON.parse(eng.fs.readFileSync(transcriptFile, 'utf8'));
+      if (validWords(cached)) {
+        if (await qcHostCall('qcActiveCacheKey') !== activeFolder) throw new Error('A sequência ativa mudou.');
+        return {segments:cached, language:eng.cfg.whisper_language || 'auto', sequenceId:ctx.sequenceId, cacheKey:activeFolder};
+      }
+    } catch(e) {}
+  }
+  if (!eng.fs.existsSync(audioFile) || eng.fs.statSync(audioFile).size <= 44) {
+    showStatus('Exportando áudio da sequência...', 'info');
+    var partial = eng.pathMod.join(cacheDir, 'audio-' + Date.now() + '.wav');
+    try {
+      await qcHostCall('qcExportActiveAudio', [preset, partial, ctx.sequenceId]);
+      if (await qcHostCall('qcActiveCacheKey') !== activeFolder) throw new Error('A sequência mudou durante a exportação. Tente novamente.');
+      if (!eng.fs.existsSync(partial) || eng.fs.statSync(partial).size <= 44) throw new Error('Áudio exportado vazio.');
+      if (eng.fs.existsSync(audioFile)) eng.fs.unlinkSync(audioFile);
+      eng.fs.renameSync(partial, audioFile);
+    } finally { if (eng.fs.existsSync(partial)) eng.fs.unlinkSync(partial); }
+  }
+  var result = await eng.transcribe(audioFile, {model:modelSel || undefined, onProgress:function(msg) { showStatus(msg, 'info'); }});
+  if (!validWords(result.segments)) throw new Error('A transcrição não contém palavras com tempos válidos.');
+  eng.fs.writeFileSync(transcriptFile, JSON.stringify(result.segments), 'utf8');
+  if (await qcHostCall('qcActiveCacheKey') !== activeFolder) throw new Error('A sequência mudou durante a transcrição. Volte à sequência original e tente novamente.');
+  result.sequenceId = ctx.sequenceId; result.cacheKey = activeFolder;
+  return result;
 }
 
 document.getElementById('qcRefreshBtn').addEventListener('click', function() { qcRefreshSources(); showStatus('Lista de fontes atualizada.', 'info'); });
@@ -805,6 +888,26 @@ document.getElementById('qcLoadBtn').addEventListener('click', function() {
 
 var qcTomEl = document.getElementById('qcTom');
 if (qcTomEl) qcTomEl.addEventListener('change', function() { var w = document.getElementById('qcCustomPromptWrap'); if (w) w.style.display = (this.value === 'custom') ? 'block' : 'none'; });
+
+var qcModoEl = document.getElementById('qcModoMontagem');
+if (qcModoEl) {
+  qcModoEl.addEventListener('change', function() {
+    var minInput = document.getElementById('qcMin');
+    var maxInput = document.getElementById('qcMax');
+    var qtdInput = document.getElementById('qcQtd');
+    var aspectInput = document.getElementById('qcAspect');
+    if (this.value === 'tubacast') {
+      if (minInput) minInput.value = '480';
+      if (maxInput) maxInput.value = '900';
+      if (qtdInput && !qtdInput.value) qtdInput.value = '5';
+      if (aspectInput) aspectInput.value = '16x9';
+    } else {
+      if (minInput && minInput.value === '480') minInput.value = '20';
+      if (maxInput && maxInput.value === '900') maxInput.value = '90';
+      if (aspectInput && aspectInput.value === '16x9') aspectInput.value = '9x16';
+    }
+  });
+}
 
 document.getElementById('qcGenBtn').addEventListener('click', function() {
   if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
@@ -888,8 +991,12 @@ function qcWriteViralReport(eng, clips) {
         var formulaStr = a.formula ? ' [' + a.formula + ']' : '';
         L.push('----------------------------------------------------------------------');
         L.push(num + ' — ' + (c.titulo || 'Corte ' + (i + 1)) + '  (' + Math.round(dur) + 's)');
-        L.push('Potencial: ' + (a.potencial_viral || 'N/A') + ' | HookScore: ' + scoreStr + formulaStr);
+        L.push('Potencial: ' + (a.potencial_viral || 'N/A') + ' | Avaliacao editorial (nao e previsao de desempenho): ' + scoreStr + formulaStr);
+        if (c.assunto) L.push('Assunto: ' + c.assunto + ' | Versao: ' + (c.versao || 'unica'));
         if (a.motivo) L.push('Racional: ' + a.motivo);
+        if (a.promessa) L.push('Promessa: ' + a.promessa);
+        if (a.entrega) L.push('Entrega: ' + a.entrega);
+        if (a.contexto) L.push('Contexto: ' + a.contexto);
         if (c.hook_text_tela) L.push('TEXTO NA TELA (0-3s): "' + c.hook_text_tela + '" (sem repetir a fala)');
         if (c.loop_point) L.push('LOOP POINT: ' + c.loop_point);
         L.push('');
@@ -921,7 +1028,8 @@ function qcWritePromoReport(eng, promo) {
         if (chRes.text) {
           try { eng.fs.writeFileSync(eng.pathMod.join(base, 'capitulos_youtube.txt'), chRes.text, 'utf8'); } catch (e) {}
           if (chRes.markers && chRes.markers.length > 0) {
-            var payload = chRes.markers.map(function(m) { return m.seconds + '|' + qcEscape(m.title); }).join('\n');
+            // [MELHORIA 5]: Removido o qcEscape duplicado em m.title (qcEscape(payload) já escapa tudo de uma vez)
+            var payload = chRes.markers.map(function(m) { return m.seconds + '|' + String(m.title).replace(/\|/g, '-'); }).join('\n');
             csInterface.evalScript('qcAddChapterMarkers("' + qcEscape(payload) + '")', function() {});
           }
         }
@@ -930,17 +1038,41 @@ function qcWritePromoReport(eng, promo) {
   } catch (e) {}
 }
 
+// [MELHORIA 1]: Pipeline completo de preparação de legendas:
+// 1) Se a transcrição do Whisper veio sem pontuação (< 5% das palavras têm pontuação),
+//    aciona `eng.corrigirPalavras(words)` para pontuar palavra a palavra antes de agrupar.
+// 2) Agrupa por pontuação (`agruparPorPontuacao`) e funde legendas piscantes (`mergeShortCaptions`).
+// 3) Corrige ortografia ou traduz com `corrigirLegendas` (trava anti-reflow).
+// 4) Garante letra maiúscula após ponto final (`capitalizeCaptions`) e alinha aos frames (`snapToFrames`).
 function qcPreparaLegenda(eng, preset, modelSel, idioma) {
   return qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
-    var words = res.segments || []; if (!words.length) throw new Error('Sem fala detectada nesta sequencia.');
-    var grupos = eng.srtMod.agruparPorPontuacao(words, 20); if (!grupos.length) throw new Error('Legenda vazia.');
-    showStatus(idioma ? '\u{1F310} Traduzindo a legenda...' : '\u{1F4DD} Corrigindo a legenda...', 'info');
-    return eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined }).then(function(corr) {
-      var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
-      return new Promise(function(resolve) {
-        csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
-          var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
-          resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+    var words = (res.segments || []).map(function(w) { return { start: w.start, end: w.end, text: w.text }; });
+    if (!words.length) throw new Error('Sem fala detectada nesta sequencia.');
+
+    var comPontuacao = words.filter(function(w) { return /[,.!?;:…]$/.test((w.text || '').trim()); }).length;
+    var precisaPontuarPalavras = (!idioma && eng.corrigirPalavras && comPontuacao < words.length * 0.05);
+
+    var promPalavras = precisaPontuarPalavras
+      ? (showStatus('\u{1F4DD} Pontuando palavras da transcrição (Gemini)...', 'info'),
+         eng.corrigirPalavras(words).then(function(palavrasCorr) {
+           return words.map(function(w, idx) { return { start: w.start, end: w.end, text: palavrasCorr[idx] || w.text }; });
+         }).catch(function() { return words; }))
+      : Promise.resolve(words);
+
+    return promPalavras.then(function(wordsPontuadas) {
+      var grupos = eng.srtMod.agruparPorPontuacao(wordsPontuadas, 20);
+      if (eng.srtMod.mergeShortCaptions) grupos = eng.srtMod.mergeShortCaptions(grupos);
+      if (!grupos.length) throw new Error('Legenda vazia.');
+
+      showStatus(idioma ? '\u{1F310} Traduzindo a legenda...' : '\u{1F4DD} Revisando ortografia e acentuação da legenda...', 'info');
+      return eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined }).then(function(corr) {
+        var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
+        if (eng.srtMod.capitalizeCaptions) caps = eng.srtMod.capitalizeCaptions(caps);
+        return new Promise(function(resolve) {
+          csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
+            var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 0;
+            resolve(fps > 0 ? eng.srtMod.snapToFrames(caps, fps) : caps);
+          });
         });
       });
     });
@@ -1001,68 +1133,31 @@ document.getElementById('qcLegendaTimelineBtn').addEventListener('click', functi
   }).catch(function(e) { showStatus('⚠️ ' + (e && e.message ? e.message : e), 'error'); });
 });
 
-document.getElementById('qcLegendaAnimadaBtn').addEventListener('click', function() {
+document.getElementById('qcLegendaAnimadaBtn').addEventListener('click', async function() {
   if (!qcComecar()) return;
-  var eng = qcLoadEngine(); if (!eng) return;
-  var preset = qcResolvePreset(eng); if (!preset) return;
-  var modelSel = document.getElementById('qcQuality').value;
-  var styleKey = document.getElementById('qcSupoClipStyleSelect').value;
-
-  showStatus('\u{1F399}\uFE0F Exportando audio e transcrevendo palavras (Whisper)...', 'info');
-  qcExportAndTranscribe(eng, preset, modelSel).then(function(res) {
-    var words = res.segments || [];
-    if (!words.length) throw new Error('Sem fala detectada nesta sequencia.');
-
-    showStatus('\u2728 Gerando legenda animada (' + styleKey + ') com FFmpeg...', 'info');
-    csInterface.evalScript('qcActiveSeqFps()', function(fpsRes) {
-      var fps = (fpsRes && fpsRes.indexOf('OK:') === 0) ? parseFloat(fpsRes.substring(3)) : 30;
-      if (isNaN(fps) || fps <= 0) fps = 30;
-
-      csInterface.evalScript('qcActiveSeqName()', function(nmRes) {
-        var seqName = (nmRes && nmRes.indexOf('OK:') === 0) ? nmRes.substring(3) : 'corte';
-        csInterface.evalScript('qcProjectDir()', function(dirRes) {
-          var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
-          var outDir = eng.pathMod.join(base, 'legendas');
-          try { if (!eng.fs.existsSync(outDir)) eng.fs.mkdirSync(outDir, { recursive: true }); } catch (e) {}
-
-          var cleanName = qcSanitizeFile(seqName);
-          var assFile = eng.pathMod.join(outDir, cleanName + '_' + styleKey + '.ass');
-          var movFile = eng.pathMod.join(outDir, cleanName + '_' + styleKey + '_overlay.mov');
-
-          var maxDur = Math.max.apply(null, words.map(function(w) { return parseFloat(w.end || 0); })) + 1;
-          if (isNaN(maxDur) || maxDur < 2) maxDur = 10;
-
-          var w = 1080, h = 1920;
-          var sa = eng.supoClip;
-          if (!sa) {
-            try { sa = require(eng.pathMod.join(eng.extRoot, 'engine', 'supoclip-animator.js')); } catch (e1) {
-              try { sa = require(eng.pathMod.join(eng.extRoot, 'supoclip-animator.js')); } catch (e2) {}
-            }
-          }
-          if (!sa) throw new Error('Motor SupoClip Animator nao encontrado.');
-
-          var assContent = sa.buildAssSubtitles(words, styleKey, w, h);
-          eng.fs.writeFileSync(assFile, assContent, 'utf8');
-
-          showStatus('\u{1F3A5} Renderizando overlay transparente ProRes 4444 (' + styleKey + ')...', 'info');
-          sa.renderTransparentMov(assFile, movFile, maxDur, w, h, fps).then(function() {
-            showStatus('\u{1F4E5} Inserindo legenda animada na trilha V2 da timeline...', 'info');
-            csInterface.evalScript('qcImportAndPlaceOverlay("' + qcEscape(movFile) + '")', function(impRes) {
-              if (impRes && impRes.indexOf('SUCCESS:') === 0) {
-                showStatus('\u2714 ' + impRes.substring(9), 'success');
-              } else {
-                showStatus('\u2714 Overlay salvo: ' + movFile + ' (arraste na trilha V2). ' + (impRes || ''), 'success');
-              }
-            });
-          }).catch(function(errRender) {
-            showStatus('\u26A0\uFE0F Erro FFmpeg: ' + (errRender.message || errRender) + ' - Arquivo .ASS gerado em: ' + assFile, 'error');
-          });
-        });
-      });
-    });
-  }).catch(function(e) {
-    showStatus('\u26A0\uFE0F ' + (e && e.message ? e.message : e), 'error');
-  });
+  var movFile = '';
+  try {
+    var eng = qcLoadEngine(); if (!eng) return;
+    var preset = qcResolvePreset(eng); if (!preset) return;
+    var res = await qcExportAndTranscribe(eng, preset, document.getElementById('qcQuality').value);
+    var ctx = await qcHostCall('qcGetTimelineContext');
+    if (String(ctx.sequenceId) !== String(res.sequenceId)) throw new Error('A sequência ativa mudou.');
+    var style = document.getElementById('qcSupoClipStyleSelect').value;
+    if (!eng.supoClip) throw new Error('Motor de legenda animada indisponível.');
+    var base; try { base = await qcHostCall('qcProjectDir'); } catch(e) { base = eng.os.tmpdir(); }
+    var outDir = eng.pathMod.join(base, 'legendas'); eng.fs.mkdirSync(outDir,{recursive:true});
+    var name = qcSanitizeFile(ctx.sequenceName) + '_' + style + '_' + Date.now();
+    var assFile = eng.pathMod.join(outDir, name + '.ass');
+    movFile = eng.pathMod.join(outDir, name + '.mov');
+    var duration = res.segments.reduce(function(end,w) { return Math.max(end,w.end); },0) + 0.1;
+    eng.fs.writeFileSync(assFile, eng.supoClip.buildAssSubtitles(res.segments,style,ctx.width,ctx.height),'utf8');
+    showStatus('Renderizando legenda animada; o tempo depende da duração e resolução...', 'info');
+    await eng.supoClip.renderTransparentMov(assFile,movFile,duration,ctx.width,ctx.height,ctx.fps);
+    if (await qcHostCall('qcActiveCacheKey') !== res.cacheKey) throw new Error('A timeline mudou durante a renderização. Overlay salvo em: ' + movFile);
+    var result = await qcHostCall('qcImportAndPlaceOverlay',[movFile,res.sequenceId]);
+    showStatus(result,'success');
+  } catch(e) { showStatus(e.message + (movFile ? ' Arquivo de saída: ' + movFile : ''),'error'); }
+  finally { qcSetBusy(false); }
 });
 
 function qcResolveMogrt(eng) {
@@ -1236,12 +1331,15 @@ function qcProcessBatchItem(eng, preset, modelSel, idioma, item, cacheRoot, outD
       }).then(function(res) {
         var words = res.segments || [];
         if (!words.length) { resolve({ ok: false, error: 'Sem fala detectada' }); return; }
+        // [MELHORIA 1]: Aplica fusão de legendas curtas (<0.55s) e capitalização automática também no modo Lote
         var grupos = eng.srtMod.agruparPorPontuacao(words, 20);
+        if (eng.srtMod.mergeShortCaptions) grupos = eng.srtMod.mergeShortCaptions(grupos);
         if (!grupos.length) { resolve({ ok: false, error: 'Transcrição vazia' }); return; }
 
         eng.corrigirLegendas(grupos.map(function(c) { return c.text; }), { idioma: idioma || undefined })
           .then(function(corr) {
             var caps = grupos.map(function(c, i) { return { start: c.start, end: c.end, text: (corr[i] || c.text) }; });
+            if (eng.srtMod.capitalizeCaptions) caps = eng.srtMod.capitalizeCaptions(caps);
 
             function finalizarSrt(capsFinal) {
               var srtStr = eng.srtMod.buildCutSrt([{ inicio: 0, fim: 1e9 }], capsFinal);
@@ -1681,7 +1779,7 @@ function qcRenderTranscriptView(eng, fullPath) {
       });
       container.appendChild(row);
     });
-  } catch (e) { container.innerHTML = '<div style="color:#ef4444;">Erro ao carregar arquivo: ' + e.message + '</div>'; }
+  } catch (e) { container.textContent = 'Erro ao carregar arquivo: ' + e.message; }
 }
 function qcHighlightTranscriptRows() { document.querySelectorAll('.qc-t-row').forEach(function(row) { var idx = parseInt(row.dataset.index, 10); if (qcSelectedIndices.has(idx)) row.classList.add('sel'); else row.classList.remove('sel'); }); }
 function qcUpdateTranscriptStats() {
@@ -1708,32 +1806,32 @@ document.getElementById('qcTranscriptCopyBtn').addEventListener('click', functio
 });
 
 /* === EDITOR DE LEGENDAS CAPCUT === */
-var qcSubCards = [];
-document.getElementById('qcOpenSubEditorBtn').addEventListener('click', function() {
-  var eng = qcLoadEngine(); if (!eng) return;
-  showStatus('\u{1F4AC} Carregando transcricao da sequencia ativa...', 'info');
-  csInterface.evalScript('qcActiveCacheKey()', function(keyRes) {
-    var activeFolder = (keyRes && keyRes.indexOf('OK:') === 0) ? keyRes.substring(3) : '', cacheRoot = qcCacheRoot(eng), foundWords = null;
-    if (activeFolder && eng.fs.existsSync(cacheRoot)) {
-      var targetFolder = qcFindCacheFolder(eng, cacheRoot, activeFolder);
-      if (targetFolder) { try { var files = eng.fs.readdirSync(targetFolder); for (var i = 0; i < files.length; i++) { if (files[i].indexOf('transcript-') === 0 && files[i].indexOf('.json') !== -1) { foundWords = JSON.parse(eng.fs.readFileSync(eng.pathMod.join(targetFolder, files[i]), 'utf8')); if (foundWords && foundWords.length) break; } } } catch (e) {} }
-    }
-    function carregarGrupos(words) {
-      if (!words || !words.length) { showStatus('\u26A0\uFE0F Nenhuma transcricao em cache. Gere os cortes primeiro.', 'error'); return; }
-      var grupos = eng.srtMod.agruparEstiloCapCut(words, 3);
-      qcSubCards = grupos.map(function(g) { return { start: g.start, end: g.end, text: g.text }; });
-      document.getElementById('qcSubEditorModal').classList.add('open');
-      qcRenderSubEditorView(); showStatus('\u2714 Editor CapCut carregado para a sequencia ativa.', 'success');
-    }
-    if (foundWords && foundWords.length) { carregarGrupos(foundWords); }
-    else {
-      var preset = qcResolvePreset(eng); if (!preset) return;
-      var modelSel = document.getElementById('qcQuality').value;
-      showStatus('\u{1F3A4} Transcrevendo para o Editor CapCut...', 'info');
-      qcExportAndTranscribe(eng, preset, modelSel).then(function(res) { carregarGrupos(res.segments || []); }).catch(function(e) { showStatus('\u26A0\uFE0F Erro ao transcrever: ' + (e.message || e), 'error'); });
-    }
-  });
+var qcSubCards = [], qcSubSequenceId = '', qcSubCacheKey = '', qcSubFps = 30;
+document.getElementById('qcOpenSubEditorBtn').addEventListener('click', async function() {
+  if (!qcComecar()) return;
+  try {
+    var eng = qcLoadEngine(); if (!eng) return;
+    var preset = qcResolvePreset(eng); if (!preset) return;
+    showStatus('Carregando legendas da sequência ativa...', 'info');
+    var res = await qcExportAndTranscribe(eng, preset, document.getElementById('qcQuality').value);
+    var ctx = await qcHostCall('qcGetTimelineContext');
+    if (String(ctx.sequenceId) !== String(res.sequenceId)) throw new Error('A sequência ativa mudou. Abra o editor novamente.');
+    qcSubCards = eng.srtMod.agruparEstiloCapCut(res.segments, 3);
+    if (!qcSubCards.length) throw new Error('Nenhuma fala válida para abrir no editor.');
+    qcSubSequenceId = res.sequenceId; qcSubCacheKey = res.cacheKey; qcSubFps = ctx.fps || 30;
+    document.getElementById('qcSubEditorModal').classList.add('open');
+    qcRenderSubEditorView();
+    showStatus('Editor CapCut carregado: ' + qcSubCards.length + ' legendas.', 'success');
+  } catch(e) { showStatus(e.message || String(e), 'error'); }
+  finally { qcSetBusy(false); }
 });
+async function qcCheckSubSequence() {
+  var ctx = await qcHostCall('qcGetTimelineContext');
+  if (String(ctx.sequenceId) !== String(qcSubSequenceId) || await qcHostCall('qcActiveCacheKey') !== qcSubCacheKey) {
+    throw new Error('A timeline mudou desde a abertura do editor. Salve o SRT para preservar as edições e reabra o editor antes de aplicar.');
+  }
+}
+
 document.getElementById('qcCloseSubModal').addEventListener('click', function() { document.getElementById('qcSubEditorModal').classList.remove('open'); });
 function qcRenderSubEditorView() {
   var container = document.getElementById('qcSubBody'); container.innerHTML = '';
@@ -1747,13 +1845,14 @@ function qcRenderSubEditorView() {
       var i = parseInt(this.dataset.index, 10), thisCard = qcSubCards[i]; if (!thisCard) return;
       if (e.key === 'Enter') {
         e.preventDefault();
-        var pos = this.selectionStart, textBefore = this.value.substring(0, pos).trim() || '\u2026', textAfter = this.value.substring(pos).trim();
-        var midTime = thisCard.start + (thisCard.end - thisCard.start) * Math.min(1, Math.max(0, pos / Math.max(1, this.value.length))), oldEnd = thisCard.end;
-        thisCard.text = textBefore; thisCard.end = midTime; qcSubCards.splice(i + 1, 0, { start: midTime, end: oldEnd, text: textAfter || '\u2026' });
+        var eng = qcLoadEngine(); if (!eng) return;
+        var split = eng.srtMod.splitCaption(thisCard, this.selectionStart, qcSubFps);
+        if (!split) return;
+        qcSubCards.splice(i, 1, split[0], split[1]);
         qcRenderSubEditorView(); setTimeout(function() { var inputs = container.querySelectorAll('input'); if (inputs[i + 1]) { inputs[i + 1].focus(); inputs[i + 1].setSelectionRange(0, 0); } }, 30);
       } else if (e.key === 'Backspace' && this.selectionStart === 0 && this.selectionEnd === 0 && i > 0) {
         e.preventDefault(); var prevCard = qcSubCards[i - 1], prevLen = prevCard.text.length;
-        prevCard.text = (prevCard.text + ' ' + thisCard.text).trim(); prevCard.end = thisCard.end; qcSubCards.splice(i, 1);
+        prevCard.text = (prevCard.text + ' ' + thisCard.text).trim(); prevCard.end = thisCard.end; prevCard.words = (prevCard.words || []).concat(thisCard.words || []); qcSubCards.splice(i, 1);
         qcRenderSubEditorView(); setTimeout(function() { var inputs = container.querySelectorAll('input'); if (inputs[i - 1]) { inputs[i - 1].focus(); inputs[i - 1].setSelectionRange(prevLen, prevLen); } }, 30);
       }
     });
@@ -1761,26 +1860,37 @@ function qcRenderSubEditorView() {
   });
 }
 
-document.getElementById('qcSubSaveSrtBtn').addEventListener('click', function() {
-  var eng = qcLoadEngine(); if (!eng) return;
-  var srtContent = eng.srtMod.gerarSrtTexto(qcSubCards.map(function(c, i) { return { index: i + 1, start: c.start, end: c.end, text: c.text }; }));
-  csInterface.evalScript('qcProjectDir()', function(dirRes) {
-    var base = (dirRes && dirRes.indexOf('OK:') === 0) ? dirRes.substring(3) : eng.os.tmpdir();
-    var srtPath = eng.pathMod.join(base, 'legendas_editadas.srt');
-    try { eng.fs.writeFileSync(srtPath, srtContent, 'utf8'); showStatus('\u2714 Legendas salvas em: legendas_editadas.srt', 'success'); csInterface.evalScript('qcImportLegendas("' + qcEscape(srtPath) + '")'); document.getElementById('qcSubEditorModal').classList.remove('open'); }
-    catch (e) { showStatus('Erro ao salvar .srt: ' + e.message, 'error'); }
-  });
-});
-
-document.getElementById('qcSubApplyMogrtBtn').addEventListener('click', function() {
-  var eng = qcLoadEngine(); if (!eng) return; var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
-  var textParam = eng.cfg.mogrt_text_param || 'Source Text';
-  var payload = { mogrt: mogrt, param: textParam, caps: qcSubCards.map(function(c) { return { s: c.start, e: c.end, t: c.text }; }) };
-  showStatus('\u{1F3A8} Inserindo graficos de legenda estilo CapCut...', 'info');
-  csInterface.evalScript('qcInsertCaptionMogrts(' + JSON.stringify(JSON.stringify(payload)) + ')', function(res) {
-    if (res && res.indexOf('SUCCESS:') === 0) showStatus('\u2714 Graficos de legenda aplicados!', 'success'); else showStatus(res || 'Erro ao aplicar MOGRTs', 'error');
-    document.getElementById('qcSubEditorModal').classList.remove('open');
-  });
+async function qcSaveSubtitles(attach) {
+  if (!qcComecar()) return;
+  try {
+    var eng = qcLoadEngine(); if (!eng) return;
+    if (attach) await qcCheckSubSequence();
+    var srt = eng.srtMod.gerarSrtTexto(qcSubCards);
+    var base;
+    try { base = await qcHostCall('qcProjectDir'); } catch(e) { base = eng.os.tmpdir(); }
+    var file = eng.pathMod.join(base, 'legendas_editadas_' + Date.now() + '.srt');
+    eng.fs.writeFileSync(file, srt, 'utf8');
+    if (attach) await qcHostCall('qcAttachSrtToActiveSequence', [file, '', qcSubSequenceId]);
+    else await qcHostCall('qcImportLegendas', [file]);
+    showStatus((attach ? 'Legendas inseridas na timeline. ' : 'SRT salvo e importado. ') + file, 'success');
+  } catch(e) { showStatus(e.message || String(e), 'error'); }
+  finally { qcSetBusy(false); }
+}
+document.getElementById('qcSubSaveSrtBtn').addEventListener('click', function() { return qcSaveSubtitles(false); });
+document.getElementById('qcSubApplySrtBtn').addEventListener('click', function() { return qcSaveSubtitles(true); });
+document.getElementById('qcSubApplyMogrtBtn').addEventListener('click', async function() {
+  if (!qcComecar()) return;
+  try {
+    var eng = qcLoadEngine(); if (!eng) return;
+    await qcCheckSubSequence();
+    eng.srtMod.gerarSrtTexto(qcSubCards); // Valida texto e tempos antes de alterar a timeline.
+    var mogrt = qcResolveMogrt(eng); if (!mogrt) return;
+    var payload = {sequenceId:qcSubSequenceId, mogrt:mogrt, param:eng.cfg.mogrt_text_param || 'Source Text', caps:qcSubCards.map(function(c) { return {s:c.start,e:c.end,t:c.text}; })};
+    showStatus('Inserindo gráficos de legenda...', 'info');
+    var result = await qcHostCall('qcInsertCaptionMogrts', [JSON.stringify(payload)]);
+    showStatus(result, 'success');
+  } catch(e) { showStatus(e.message || String(e), 'error'); }
+  finally { qcSetBusy(false); }
 });
 
 function qcSweepOrphanedTemp() {
@@ -1831,28 +1941,33 @@ function qcRefreshAcabamentosContext() {
 
 document.getElementById('qcAcRefreshSeqBtn').addEventListener('click', qcRefreshAcabamentosContext);
 
-// Presets de Ritmo
-function qcSetSilencePreset(thresh, minDur, pad, activeBtnId) {
+// Presets de Ritmo (incluindo o modo 🎯 Auto calibrado pelo piso de ruído)
+function qcSetSilencePreset(thresh, minDur, pad, activeBtnId, autoNoise) {
   document.getElementById('qcAcThreshold').value = thresh;
-  document.getElementById('qcAcThresholdVal').textContent = thresh + ' dB';
+  document.getElementById('qcAcThresholdVal').textContent = (autoNoise ? 'Auto (~' + thresh + ' dB)' : thresh + ' dB');
   document.getElementById('qcAcMinDur').value = minDur;
   document.getElementById('qcAcMinDurVal').textContent = minDur + ' ms';
   document.getElementById('qcAcPadding').value = pad;
   document.getElementById('qcAcPaddingVal').textContent = pad + ' ms';
-  ['qcPresetNatural','qcPresetRitmado','qcPresetRapido'].forEach(function(id) {
+  var autoChk = document.getElementById('qcAcAutoThreshCheck');
+  if (autoChk) autoChk.checked = !!autoNoise;
+  ['qcPresetNatural','qcPresetRitmado','qcPresetRapido','qcPresetAutoNoise'].forEach(function(id) {
     var b = document.getElementById(id);
     if (b) b.classList.toggle('active', id === activeBtnId);
   });
 }
 
 document.getElementById('qcPresetNatural').addEventListener('click', function() {
-  qcSetSilencePreset(-32, 600, 150, 'qcPresetNatural');
+  qcSetSilencePreset(-32, 600, 150, 'qcPresetNatural', false);
 });
 document.getElementById('qcPresetRitmado').addEventListener('click', function() {
-  qcSetSilencePreset(-30, 400, 100, 'qcPresetRitmado');
+  qcSetSilencePreset(-30, 400, 100, 'qcPresetRitmado', false);
 });
 document.getElementById('qcPresetRapido').addEventListener('click', function() {
-  qcSetSilencePreset(-26, 250, 50, 'qcPresetRapido');
+  qcSetSilencePreset(-26, 250, 50, 'qcPresetRapido', false);
+});
+document.getElementById('qcPresetAutoNoise').addEventListener('click', function() {
+  qcSetSilencePreset(-30, 380, 90, 'qcPresetAutoNoise', true);
 });
 
 // Sliders de ajuste fino
@@ -1881,316 +1996,136 @@ document.querySelectorAll('.qc-quick-frame').forEach(function(btn) {
   });
 });
 
-// Execução: Remover Respiros
-document.getElementById('qcAcRunSilenceBtn').addEventListener('click', async function() {
-  if (!qcComecar()) return;
-  var eng = qcLoadEngine(); if (!eng) return;
-  var preset = qcResolvePreset(eng); if (!preset) return;
-
-  var thresh = Number(document.getElementById('qcAcThreshold').value);
-  var minDur = Number(document.getElementById('qcAcMinDur').value);
-  var pad = Number(document.getElementById('qcAcPadding').value);
-  var mode = document.getElementById('qcAcModeSelect').value || 'ripple';
-  var trackIdx = Number(document.getElementById('qcAcTrackSelect').value || '0');
-  var doBackup = document.getElementById('qcAcBackupSilenceCheck').checked;
-
-  showStatus('🔍 Verificando timeline da sequência ativa...', 'info');
-
-  csInterface.evalScript('qcGetTimelineContext()', async function(ctxStr) {
-    var ctx;
-    try { ctx = JSON.parse(ctxStr); } catch(e) {}
-    if (!ctx || !ctx.ok || !ctx.data || !ctx.data.sequenceId) {
-      showStatus('⚠️ Nenhuma sequência ativa. Abra a timeline do seu corte no Premiere.', 'error');
-      qcSetBusy(false);
-      return;
+// A mesma operação é aguardada pelo painel e pelo MCP; falhas abortam as fases seguintes.
+async function qcRunSilence(options) {
+  if (!qcComecar()) throw new Error('Outra operação está em andamento.');
+  options = options || {};
+  var eng, tempWav;
+  try {
+    eng = qcLoadEngine(); if (!eng) throw new Error('Motor indisponível.');
+    var preset = qcResolvePreset(eng); if (!preset) throw new Error('Preset de áudio indisponível.');
+    function setting(key, id) { return options[key] !== undefined ? options[key] : document.getElementById(id).value; }
+    var threshold = Number(setting('thresholdDb','qcAcThreshold'));
+    var minDur = Number(setting('minDurationMs','qcAcMinDur')), pad = Number(setting('paddingMs','qcAcPadding'));
+    var track = Number(setting('trackIndex','qcAcTrackSelect')), mode = setting('mode','qcAcModeSelect') || 'ripple';
+    var backup = options.backup !== undefined ? options.backup : document.getElementById('qcAcBackupSilenceCheck').checked;
+    if (![threshold,minDur,pad,track].every(Number.isFinite) || threshold > 0 || minDur <= 0 || pad < 0 || Math.floor(track) !== track || ['razor','lift','ripple'].indexOf(mode) < 0) throw new Error('Parâmetros de silêncio inválidos.');
+    var ctx = await qcHostCall('qcGetTimelineContext');
+    lastSilenceBackup = null;
+    document.getElementById('qcAcUndoSilenceBtn').style.display = 'none';
+    if (backup) {
+      showStatus('Criando backup da sequência...', 'info');
+      var copy = await qcHostCall('qcDuplicateActiveSequence', [ctx.sequenceId]);
+      if (!copy || !copy.backupSequenceId || String(copy.originalSequenceId) !== String(ctx.sequenceId)) throw new Error('Backup não confirmado. Edição cancelada.');
+      copy.workingSequenceId = ctx.sequenceId; copy.originalName = ctx.sequenceName;
+      lastSilenceBackup = copy;
+      document.getElementById('qcAcUndoSilenceBtn').style.display = 'block';
     }
-
-    var workingSeqId = ctx.data.sequenceId;
-
-    if (doBackup) {
-      showStatus('💾 Criando backup da sequência...', 'info');
-      await new Promise(function(resolve) {
-        csInterface.evalScript('qcDuplicateActiveSequence()', function(dupStr) {
-          try {
-            var dup = JSON.parse(dupStr);
-            if (dup && dup.ok && dup.data) {
-              lastSilenceBackup = dup.data;
-            }
-          } catch(e) {}
-          resolve();
-        });
-      });
+    tempWav = eng.pathMod.join(qcCacheRoot(eng), 'ref_silence_' + Date.now() + '.wav');
+    showStatus('Exportando áudio para análise...', 'info');
+    await qcHostCall('qcExportSilenceRefAudio', [JSON.stringify({sequenceId:ctx.sequenceId,trackIndex:track,outputPath:tempWav,presetPath:preset})]);
+    var analysis = AutoCutAudio.analyzeWavFile(tempWav);
+    var automatic = options.autoThreshold !== undefined ? options.autoThreshold : document.getElementById('qcAcAutoThreshCheck').checked;
+    if (automatic) {
+      threshold = AutoCutAudio.suggestThreshold(analysis.dbfs);
+      document.getElementById('qcAcThreshold').value = threshold;
+      document.getElementById('qcAcThresholdVal').textContent = threshold + ' dB (Auto)';
     }
-
-    var tempWav = eng.pathMod.join(qcCacheRoot(eng), 'ref_silence_' + Date.now() + '.wav');
-    showStatus('🎧 Exportando áudio da faixa para análise de respiros...', 'info');
-
-    var exportArgs = JSON.stringify({
-      trackIndex: trackIdx,
-      outputPath: tempWav,
-      presetPath: preset
-    });
-
-    csInterface.evalScript('qcExportSilenceRefAudio(' + JSON.stringify(exportArgs) + ')', async function(expStr) {
-      var expRes;
-      try { expRes = JSON.parse(expStr); } catch(e) {}
-      if (!expRes || !expRes.ok) {
-        showStatus('⚠️ Falha ao exportar áudio da timeline: ' + ((expRes && expRes.error) || expStr), 'error');
-        qcSetBusy(false);
-        return;
+    var regions = AutoCutAudio.detectSilenceRegions(analysis.dbfs, 10, threshold, minDur, pad);
+    if (!regions.length) { showStatus('Nenhum silêncio encontrado com estes parâmetros.', 'info'); return {intervals:0}; }
+    var times = [];
+    regions.forEach(function(r) { times.push(r[0]/1000, r[1]/1000); });
+    times = times.filter(function(t,i,all) { return all.indexOf(t) === i; }).sort(function(a,b) { return b-a; });
+    for (var i=0;i<times.length;i+=24) {
+      showStatus('Fatiando timeline: ' + Math.min(i+24,times.length) + '/' + times.length, 'info');
+      await qcHostCall('qcApplySilenceCuts', [JSON.stringify({sequenceId:ctx.sequenceId,phase:'razorTimes',timesSeconds:times.slice(i,i+24)})]);
+    }
+    var removed = 0;
+    if (mode !== 'razor') {
+      var descending = regions.slice().sort(function(a,b) { return b[0]-a[0]; });
+      for (var j=0;j<descending.length;j+=16) {
+        var lifted = await qcHostCall('qcApplySilenceCuts', [JSON.stringify({sequenceId:ctx.sequenceId,phase:'lift',intervals:descending.slice(j,j+16)})]);
+        removed += Number(lifted && lifted.removedClipPieces || 0);
       }
-
-      showStatus('🔬 Analisando oscilações e detectando pausas da fala...', 'info');
-      var regions = [];
-      try {
-        if (typeof AutoCutAudio === 'undefined') {
-          throw new Error('Módulo de análise de áudio (audio-analysis.js) não encontrado.');
-        }
-        var analysis = AutoCutAudio.analyzeWavFile(tempWav);
-        regions = AutoCutAudio.detectSilenceRegions(analysis.dbfs, 10, thresh, minDur, pad);
-      } catch(errAn) {
-        showStatus('⚠️ Erro na análise acústica: ' + errAn.message, 'error');
-        try { AutoCutAudio.deleteFile(tempWav); } catch(e) {}
-        qcSetBusy(false);
-        return;
-      }
-
-      try { AutoCutAudio.deleteFile(tempWav); } catch(e) {}
-
-      if (!regions || regions.length === 0) {
-        showStatus('Nenhum trecho de silêncio detectado em ' + thresh + ' dB. Ajuste o slider para -25 dB ou reduza a duração mínima.', 'info');
-        qcSetBusy(false);
-        return;
-      }
-
-      showStatus('⚡ Fatiando timeline e eliminando ' + regions.length + ' trechos de respiro...', 'info');
-
-      // 1) Razor Batches
-      var times = [];
-      for (var ri = 0; ri < regions.length; ri++) {
-        times.push(regions[ri][0] / 1000);
-        times.push(regions[ri][1] / 1000);
-      }
-      times = times.filter(function(v, idx, self) { return self.indexOf(v) === idx; });
-      times.sort(function(a, b) { return a - b; });
-
-      var RAZOR_BATCH = 24;
-      for (var rb = 0; rb < times.length; rb += RAZOR_BATCH) {
-        var rBatch = times.slice(rb, rb + RAZOR_BATCH);
-        var rArgs = JSON.stringify({
-          sequenceId: workingSeqId,
-          phase: 'razorTimes',
-          timesSeconds: rBatch
-        });
-        await new Promise(function(resRz) {
-          csInterface.evalScript('qcApplySilenceCuts(' + JSON.stringify(rArgs) + ')', resRz);
-        });
-      }
-
-      // 2) Lift Batches (se mode == lift ou ripple)
-      if (mode === 'lift' || mode === 'ripple') {
-        var LIFT_BATCH = 16;
-        for (var lb = 0; lb < regions.length; lb += LIFT_BATCH) {
-          var lBatch = regions.slice(lb, lb + LIFT_BATCH);
-          var lArgs = JSON.stringify({
-            sequenceId: workingSeqId,
-            phase: 'lift',
-            intervals: lBatch
-          });
-          await new Promise(function(resLf) {
-            csInterface.evalScript('qcApplySilenceCuts(' + JSON.stringify(lArgs) + ')', resLf);
-          });
-        }
-      }
-
-      // 3) Close Gaps (se mode == ripple)
-      if (mode === 'ripple') {
-        showStatus('🗜️ Fechando lacunas da timeline (ripple delete)...', 'info');
-        var cArgs = JSON.stringify({
-          sequenceId: workingSeqId,
-          phase: 'closeGaps',
-          intervals: regions
-        });
-        await new Promise(function(resCg) {
-          csInterface.evalScript('qcApplySilenceCuts(' + JSON.stringify(cArgs) + ')', resCg);
-        });
-      }
-
-      var totalSec = (regions.reduce(function(a, r) { return a + (r[1] - r[0]); }, 0) / 1000).toFixed(1);
-      showStatus('🎉 Sucesso! ' + regions.length + ' respiros removidos (~' + totalSec + 's eliminados da timeline).', 'success');
-
-      var sumEl = document.getElementById('qcAcSilenceSummary');
-      if (sumEl) {
-        sumEl.style.display = 'block';
-        sumEl.innerHTML = '✅ <b>' + regions.length + ' respiros cortados!</b> Duração reduzida em <b>~' + totalSec + 's</b>. Agora você pode aplicar o <b>J-Cut</b> abaixo!';
-      }
-
-      if (lastSilenceBackup) {
-        var undoBtn = document.getElementById('qcAcUndoSilenceBtn');
-        if (undoBtn) undoBtn.style.display = 'block';
-      }
-
-      qcSetBusy(false);
-      qcRefreshAcabamentosContext();
-    });
-  });
+    }
+    if (mode === 'ripple') await qcHostCall('qcApplySilenceCuts', [JSON.stringify({sequenceId:ctx.sequenceId,phase:'closeGaps',intervals:regions})]);
+    var after = await qcHostCall('qcGetTimelineContext');
+    if (String(after.sequenceId) !== String(ctx.sequenceId)) throw new Error('A sequência ativa mudou. Confira o resultado na sequência original.');
+    var reduction = Math.max(0, ctx.durationSeconds - after.durationSeconds);
+    var message = mode === 'razor' ? 'Pontos de corte aplicados; nenhum trecho removido.'
+      : mode === 'lift' ? removed + ' fragmentos removidos; lacunas mantidas.'
+      : 'Etapas concluídas. Redução medida na timeline: ' + reduction.toFixed(1) + 's.';
+    document.getElementById('qcAcSilenceSummary').textContent = message;
+    document.getElementById('qcAcSilenceSummary').style.display = 'block';
+    showStatus(message, 'success');
+    return {intervals:regions.length,removedClipPieces:removed,reductionSeconds:reduction,mode:mode};
+  } finally {
+    if (eng && tempWav) { try { if (eng.fs.existsSync(tempWav)) eng.fs.unlinkSync(tempWav); } catch(e) {} }
+    qcSetBusy(false);
+  }
+}
+document.getElementById('qcAcRunSilenceBtn').addEventListener('click', function() {
+  return qcRunSilence().catch(function(e) { showStatus('Operação interrompida: ' + e.message + ' Confira a timeline antes de repetir; o backup, quando criado, está disponível.', 'error'); });
 });
 
-// Desfazer Remoção de Respiros
-document.getElementById('qcAcUndoSilenceBtn').addEventListener('click', function() {
-  if (!lastSilenceBackup) return;
-  showStatus('↩️ Restaurando sequência original do backup...', 'info');
-  csInterface.evalScript('qcRestoreSilenceBackup(' + JSON.stringify(JSON.stringify(lastSilenceBackup)) + ')', function(resStr) {
-    try {
-      var res = JSON.parse(resStr);
-      if (res && res.ok) {
-        showStatus('✅ Cortes de respiro desfeitos! Sequência original restaurada.', 'success');
-        document.getElementById('qcAcUndoSilenceBtn').style.display = 'none';
-        document.getElementById('qcAcSilenceSummary').style.display = 'none';
-        lastSilenceBackup = null;
-        qcRefreshAcabamentosContext();
-      } else {
-        showStatus('⚠️ Erro ao restaurar: ' + ((res && res.error) || resStr), 'error');
-      }
-    } catch(e) {
-      showStatus('⚠️ Erro ao restaurar: ' + e.message, 'error');
-    }
-  });
-});
+async function qcRestoreEditorBackup(kind) {
+  var backup = kind === 'silence' ? lastSilenceBackup : lastJCutBackup;
+  if (!backup || !qcComecar()) return;
+  try {
+    await qcHostCall(kind === 'silence' ? 'qcRestoreSilenceBackup' : 'qcRestoreJCutBackup', [JSON.stringify(backup)]);
+    if (kind === 'silence') lastSilenceBackup = null; else lastJCutBackup = null;
+    document.getElementById(kind === 'silence' ? 'qcAcUndoSilenceBtn' : 'qcAcUndoJCutBtn').style.display = 'none';
+    document.getElementById(kind === 'silence' ? 'qcAcSilenceSummary' : 'qcAcJCutSummary').style.display = 'none';
+    showStatus('Backup aberto. A sequência editada foi preservada.', 'success');
+    qcRefreshAcabamentosContext();
+  } catch(e) { showStatus('Não foi possível abrir o backup: ' + e.message, 'error'); }
+  finally { qcSetBusy(false); }
+}
+document.getElementById('qcAcUndoSilenceBtn').addEventListener('click', function() { return qcRestoreEditorBackup('silence'); });
 
-// Execução: Gerar J-Cuts
+async function qcRunJCut(options) {
+  if (!qcComecar()) throw new Error('Outra operação está em andamento.');
+  options = options || {};
+  try {
+    var frames = Number(options.frames !== undefined ? options.frames : document.getElementById('qcAcJCutFrames').value);
+    if (!Number.isFinite(frames) || frames < 1 || frames > 120 || Math.floor(frames) !== frames) throw new Error('Quantidade de frames inválida.');
+    var ctx = await qcHostCall('qcGetTimelineContext');
+    var backup = options.backup !== undefined ? options.backup : document.getElementById('qcAcBackupJCutCheck').checked;
+    lastJCutBackup = null;
+    document.getElementById('qcAcUndoJCutBtn').style.display = 'none';
+    if (backup) {
+      var copy = await qcHostCall('qcDuplicateActiveSequence', [ctx.sequenceId]);
+      if (!copy || !copy.backupSequenceId || String(copy.originalSequenceId) !== String(ctx.sequenceId)) throw new Error('Backup não confirmado. Edição cancelada.');
+      copy.workingSequenceId = ctx.sequenceId; copy.originalName = ctx.sequenceName;
+      lastJCutBackup = copy;
+      document.getElementById('qcAcUndoJCutBtn').style.display = 'block';
+    }
+    showStatus('Aplicando J-Cuts...', 'info');
+    var result = await qcHostCall('qcApplyJCuts', [JSON.stringify({sequenceId:ctx.sequenceId,step:'all',frames:frames})]);
+    var message = 'J-Cut concluído: ' + Number(result && result.segmentCount || 0) + ' segmentos.';
+    document.getElementById('qcAcJCutSummary').textContent = message;
+    document.getElementById('qcAcJCutSummary').style.display = 'block';
+    showStatus(message, 'success');
+    return result;
+  } finally { qcSetBusy(false); }
+}
 document.getElementById('qcAcRunJCutBtn').addEventListener('click', function() {
-  if (!qcComecar()) return;
-  var frames = parseInt(document.getElementById('qcAcJCutFrames').value, 10);
-  if (isNaN(frames) || frames < 1) frames = 4;
-  var doBackup = document.getElementById('qcAcBackupJCutCheck').checked;
-
-  showStatus('🎬 Aplicando J-Cuts de ' + frames + ' frames nos cortes da timeline...', 'info');
-
-  csInterface.evalScript('qcGetTimelineContext()', async function(ctxStr) {
-    var ctx;
-    try { ctx = JSON.parse(ctxStr); } catch(e) {}
-    if (!ctx || !ctx.ok || !ctx.data || !ctx.data.sequenceId) {
-      showStatus('⚠️ Nenhuma sequência ativa. Abra a timeline do seu corte no Premiere.', 'error');
-      qcSetBusy(false);
-      return;
-    }
-
-    if (doBackup) {
-      await new Promise(function(resolve) {
-        csInterface.evalScript('qcDuplicateActiveSequence()', function(dupStr) {
-          try {
-            var dup = JSON.parse(dupStr);
-            if (dup && dup.ok && dup.data) {
-              lastJCutBackup = dup.data;
-            }
-          } catch(e) {}
-          resolve();
-        });
-      });
-    }
-
-    var jcutArgs = JSON.stringify({
-      step: 'all',
-      frames: frames
-    });
-
-    csInterface.evalScript('qcApplyJCuts(' + JSON.stringify(jcutArgs) + ')', function(resStr) {
-      qcSetBusy(false);
-      try {
-        var res = JSON.parse(resStr);
-        if (res && res.ok && res.data) {
-          var count = res.data.segmentCount || 0;
-          showStatus('🎬 J-Cuts aplicados com sucesso em ' + count + ' segmentos (' + frames + ' frames de sobreposição)!', 'success');
-
-          var sumEl = document.getElementById('qcAcJCutSummary');
-          if (sumEl) {
-            sumEl.style.display = 'block';
-            sumEl.innerHTML = '🎬 <b>' + count + ' segmentos com J-Cut aplicados!</b> O áudio das falas seguintes agora entra ' + frames + ' frames antes, suavizando o corte.';
-          }
-
-          if (lastJCutBackup) {
-            var undoBtn = document.getElementById('qcAcUndoJCutBtn');
-            if (undoBtn) undoBtn.style.display = 'block';
-          }
-        } else {
-          showStatus('⚠️ Não foi possível aplicar J-Cuts: ' + ((res && res.error) || resStr), 'error');
-        }
-      } catch(e) {
-        showStatus('⚠️ Falha ao executar J-Cuts: ' + e.message, 'error');
-      }
-    });
-  });
+  return qcRunJCut().catch(function(e) { showStatus('J-Cut interrompido: ' + e.message, 'error'); });
 });
 
-// Desfazer J-Cuts
-document.getElementById('qcAcUndoJCutBtn').addEventListener('click', function() {
-  if (!lastJCutBackup) return;
-  showStatus('↩️ Restaurando sequência anterior aos J-Cuts...', 'info');
-  csInterface.evalScript('qcRestoreJCutBackup(' + JSON.stringify(JSON.stringify(lastJCutBackup)) + ')', function(resStr) {
-    try {
-      var res = JSON.parse(resStr);
-      if (res && res.ok) {
-        showStatus('✅ J-Cuts desfeitos com sucesso! Sequência restaurada.', 'success');
-        document.getElementById('qcAcUndoJCutBtn').style.display = 'none';
-        document.getElementById('qcAcJCutSummary').style.display = 'none';
-        lastJCutBackup = null;
-        qcRefreshAcabamentosContext();
-      } else {
-        showStatus('⚠️ Erro ao restaurar: ' + ((res && res.error) || resStr), 'error');
-      }
-    } catch(e) {
-      showStatus('⚠️ Erro ao restaurar: ' + e.message, 'error');
-    }
-  });
-});
+document.getElementById('qcAcUndoJCutBtn').addEventListener('click', function() { return qcRestoreEditorBackup('jcut'); });
 
 window.addEventListener('load', function() {
   qcRefreshSources();
   qcRefreshBins();
   qcSweepOrphanedTemp();
   qcInitSettingsUI();
+  if (typeof QuarksMcpServer !== 'undefined') {
+    QuarksMcpServer.start();
+  }
   showStatus('Pronto. Abra a sequencia e escolha a acao desejada nas abas.', 'info');
 });
 </script>
-
-<!-- MODAL EDITOR DE TRANSCRICAO -->
-<div id="qcTranscriptModal" class="modal-overlay">
-  <div class="modal-box">
-    <div class="modal-header">
-      <h3 style="color:#10b981;">📝 Editor Interativo de Transcricao</h3>
-      <button id="qcCloseTranscriptModal" class="modal-close">✕</button>
-    </div>
-    <div class="modal-toolbar">
-      <select id="qcTranscriptSelect" style="flex:1;padding:7px 10px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:6px;"></select>
-      <div id="qcTranscriptStats" style="font-size:11px;color:#a7f3d0;font-weight:700;white-space:nowrap;">&#x23F1; 0.0s</div>
-    </div>
-    <div id="qcTranscriptBody" class="modal-body"></div>
-    <div class="modal-footer">
-      <input type="text" id="qcTranscriptCutName" value="Corte Selecionado" placeholder="Nome da sequencia" style="flex:1;padding:7px 10px;background:var(--card2);border:1px solid var(--line);color:#fff;border-radius:6px;">
-      <button id="qcTranscriptBuildBtn" style="background:#10b981;color:#052e16;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;">🎬 Criar Corte</button>
-      <button id="qcTranscriptCopyBtn" style="background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:600;">📋 Copiar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL EDITOR DE LEGENDAS CAPCUT -->
-<div id="qcSubEditorModal" class="modal-overlay">
-  <div class="modal-box">
-    <div class="modal-header">
-      <h3 style="color:#38bdf8;">💬 Editor de Legendas (Estilo CapCut)</h3>
-      <button id="qcCloseSubModal" class="modal-close">✕</button>
-    </div>
-    <div class="modal-toolbar" style="font-size:11px;color:var(--muted);">
-      💡 <b style="color:var(--txt);">Enter</b> divide a legenda &middot; <b style="color:var(--txt);">Backspace</b> no inicio une com a anterior
-    </div>
-    <div id="qcSubBody" class="modal-body" style="display:flex;flex-direction:column;gap:6px;"></div>
-    <div class="modal-footer">
-      <button id="qcSubSaveSrtBtn" class="btn-sky" style="flex:1;">💾 Salvar .SRT</button>
-      <button id="qcSubApplyMogrtBtn" class="btn-sky2" style="flex:1;">🎨 Aplicar MOGRTs</button>
-    </div>
-  </div>
-</div>
 
 </body>
 </html>

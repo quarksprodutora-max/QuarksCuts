@@ -1,4 +1,5 @@
-var AutoJCut = AutoJCut || {};
+$.global.AutoJCut = $.global.AutoJCut || {};
+var AutoJCut = $.global.AutoJCut;
 
 AutoJCut.TICKS_PER_SECOND = 254016000000;
 AutoJCut.EPS_SECONDS = 0.02;
@@ -558,12 +559,8 @@ AutoJCut.restoreBackup = function (jsonStr) {
     if (!originalName) {
       originalName = String(backup.name).replace(/ - backup$/i, "");
     }
-    var working = args.workingSequenceId ? AutoJCut._findSequenceById(args.workingSequenceId) : AutoJCut._activeSequence();
-    AutoJCut._activateSequence(backup);
-    if (working && String(working.sequenceID) !== String(backup.sequenceID)) {
-      AutoJCut._deleteSequence(working);
-    }
-    AutoJCut._renameSequence(backup, originalName);
+    // Abrir o backup não deve apagar a sequência ativa nem quebrar referências em nests.
+    AutoJCut._renameSequence(backup, originalName + ' - Restaurada');
     var restored = AutoJCut._findSequenceById(backup.sequenceID) || backup;
     AutoJCut._activateSequence(restored);
     return AutoJCut._ok({
@@ -1800,19 +1797,8 @@ AutoJCut._jcutJob = null;
 
 AutoJCut._generateJCutsActivateSeq = function (args) {
   var seq = AutoJCut._activeSequence();
-  var wantId = null;
-  if (args && args.sequenceId) {
-    wantId = args.sequenceId;
-  } else if (AutoJCut._jcutJob && AutoJCut._jcutJob.sequenceId) {
-    wantId = AutoJCut._jcutJob.sequenceId;
-  }
-  if (wantId && seq && String(wantId) !== String(seq.sequenceID)) {
-    var found = AutoJCut._findSequenceById(wantId);
-    if (found) {
-      AutoJCut._activateSequence(found);
-      seq = AutoJCut._activeSequence();
-    }
-  }
+  var wantId = args && args.sequenceId || (AutoJCut._jcutJob && AutoJCut._jcutJob.sequenceId);
+  if (wantId && (!seq || String(wantId) !== String(seq.sequenceID))) throw new Error('A sequência ativa mudou. J-Cut interrompido.');
   return seq;
 };
 

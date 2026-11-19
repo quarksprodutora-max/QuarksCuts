@@ -1,6 +1,10 @@
+// ============================================================================
+// QUARKS CUTS — GERADOR E PROCESSADOR DE LEGENDAS SRT (srt.js)
 // Gera arquivos .srt (um por corte) a partir das legendas curtas transcritas.
 // Os tempos das legendas (timeline original) são RE-BASEADOS ao início de cada
-// corte, respeitando que um corte pode juntar vários trechos não contíguos.
+// corte, respeitando que um corte pode juntar vários trechos não contíguos
+// (inclusive quando o Hook/Cold Open vem de um trecho futuro do episódio).
+// ============================================================================
 
 const fs = require('fs');
 const path = require('path');
@@ -8,12 +12,11 @@ const path = require('path');
 function pad(n, w) { n = '' + n; while (n.length < w) n = '0' + n; return n; }
 
 function formatSrtTime(sec) {
-  if (sec < 0) sec = 0;
-  const ms = Math.round((sec - Math.floor(sec)) * 1000);
-  let t = Math.floor(sec);
-  const h = Math.floor(t / 3600); t -= h * 3600;
-  const m = Math.floor(t / 60); const s = t - m * 60;
-  return pad(h, 2) + ':' + pad(m, 2) + ':' + pad(s, 2) + ',' + pad(ms, 3);
+  var total = Math.max(0, Math.round(Number(sec) * 1000));
+  if (!Number.isFinite(total)) throw new Error('Tempo de legenda inválido.');
+  var h = Math.floor(total / 3600000), m = Math.floor(total / 60000) % 60;
+  var seconds = Math.floor(total / 1000) % 60, ms = total % 1000;
+  return pad(h, 2) + ':' + pad(m, 2) + ':' + pad(seconds, 2) + ',' + pad(ms, 3);
 }
 
 function sanitizeFile(name) {
@@ -52,28 +55,44 @@ function agruparPorPontuacao(words, maxChars) {
 // Reagrupa palavras em legendas ultra-curtas (1 a 3 palavras max), ignorando
 // sentenças longas. Feito especificamente para imitar o estilo CapCut/TikTok.
 function agruparEstiloCapCut(words, maxWords) {
-  maxWords = maxWords || 2; // Default to 2 words per chunk for ultra dynamic feel
-  var out = [], cur = null, wordCount = 0;
-  for (var i = 0; i < words.length; i++) {
-    var t = (words[i].text || words[i].word || '').replace(/^\s+|\s+$/g, '');
-    if (!t) continue;
-    if (cur === null) {
-      cur = { start: words[i].start, end: words[i].end, text: t };
-      wordCount = 1;
-    } else {
-      cur.text += ' ' + t;
-      cur.end = words[i].end;
-      wordCount++;
-    }
-    // Quebra se atingiu o máximo de palavras
-    if (wordCount >= maxWords) {
-      out.push(cur);
-      cur = null;
-      wordCount = 0;
-    }
-  }
+  maxWords = Math.max(1, Math.floor(maxWords || 3));
+  var out = [], cur = null;
+  (words || []).forEach(function(w) {
+    if (!w || !Number.isFinite(w.start) || !Number.isFinite(w.end) || w.start < 0 || w.end <= w.start) return;
+    var text = String(w.text || w.word || '').trim();
+    if (!text) return;
+    if (cur && (w.start - cur.end > 0.5 || cur.words.length >= maxWords || /[.!?…]$/.test(cur.text))) { out.push(cur); cur = null; }
+    if (!cur) cur = {start:w.start, end:w.end, text:'', words:[]};
+    cur.text += (cur.text ? ' ' : '') + text;
+    cur.end = Math.max(cur.end, w.end);
+    cur.words.push({start:w.start, end:w.end, text:text});
+  });
   if (cur) out.push(cur);
   return out;
+}
+
+// Enter usa o início da palavra seguinte quando o texto ainda corresponde à transcrição.
+// Para texto reescrito, usa proporção e mantém ao menos um frame em cada lado.
+function splitCaption(card, position, fps) {
+  const text = String(card.text || '');
+  const before = text.slice(0, position).trim(), after = text.slice(position).trim();
+  const frame = 1 / (fps > 0 ? fps : 30);
+  if (!before || !after || card.end - card.start < 2 * frame) return null;
+  const words = card.words || [];
+  let split = card.start + (card.end - card.start) * position / text.length;
+  let splitIndex = -1;
+  if (words.map(w => w.text).join(' ') === text) {
+    for (let i = 1; i < words.length; i++) {
+      if (words.slice(0,i).map(w=>w.text).join(' ') === before && words.slice(i).map(w=>w.text).join(' ') === after) {
+        split = words[i].start; splitIndex = i; break;
+      }
+    }
+  }
+  split = Math.max(card.start + frame, Math.min(card.end - frame, split));
+  return [
+    {start:card.start,end:split,text:before,words:splitIndex >= 0 ? words.slice(0,splitIndex) : []},
+    {start:split,end:card.end,text:after,words:splitIndex >= 0 ? words.slice(splitIndex) : []}
+  ];
 }
 
 // Alinha os tempos das legendas às fronteiras de FRAME da sequência.
@@ -302,13 +321,14 @@ function parseSrtContent(content) {
 // Gera uma string SRT completa a partir de um array de cards [{index,start,end,text}].
 // Usado pelo Editor CapCut para exportar o .srt após edição manual.
 function gerarSrtTexto(cards) {
-  var out = [];
-  for (var i = 0; i < cards.length; i++) {
-    var c = cards[i];
-    var idx = c.index || (i + 1);
-    out.push(idx + '\n' + formatSrtTime(c.start) + ' --> ' + formatSrtTime(c.end) + '\n' + (c.text || '').trim() + '\n');
-  }
-  return out.join('\n');
+  if (!Array.isArray(cards) || !cards.length) throw new Error('Nenhuma legenda para salvar.');
+  return cards.map(function(c, i) {
+    if (!c || !Number.isFinite(c.start) || !Number.isFinite(c.end) || c.start < 0 || Math.round(c.end * 1000) <= Math.round(c.start * 1000) || !String(c.text || '').trim()) {
+      throw new Error('Texto ou duração inválida na legenda ' + (i + 1) + '.');
+    }
+    if (i && c.start < cards[i-1].end - 0.001) throw new Error('Legendas sobrepostas na posição ' + (i + 1) + '.');
+    return (i+1) + '\n' + formatSrtTime(c.start) + ' --> ' + formatSrtTime(c.end) + '\n' + c.text.trim() + '\n';
+  }).join('\n');
 }
 
-module.exports = { gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, agruparEstiloCapCut, snapToFrames, parseSrtContent, mergeShortCaptions, capitalizeCaptions, gerarSrtTexto };
+module.exports = { splitCaption, formatSrtTime, gerarLegendas, captionsDentroDosCortes, buildCutSrt, agruparPorPontuacao, agruparEstiloCapCut, snapToFrames, parseSrtContent, mergeShortCaptions, capitalizeCaptions, gerarSrtTexto };

@@ -1,3 +1,222 @@
+// ============================================================================
+// JSON POLYFILL PARA EXTENDSCRIPT (ADOBE PREMIERE PRO / CEP)
+// Resolve: ReferenceError: JSON is undefined
+// ============================================================================
+if (typeof JSON !== "object") {
+    JSON = {};
+}
+if (typeof $.global.JSON === "undefined") { $.global.JSON = JSON; }
+(function () {
+    "use strict";
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_escapable = /[\\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+
+    function f(n) {
+        return (n < 10) ? "0" + n : n;
+    }
+
+    function this_value() {
+        return this.valueOf();
+    }
+
+    if (typeof Date.prototype.toJSON !== "function") {
+        Date.prototype.toJSON = function () {
+            return isFinite(this.valueOf())
+                ? (
+                    this.getUTCFullYear() + "-"
+                    + f(this.getUTCMonth() + 1) + "-"
+                    + f(this.getUTCDate()) + "T"
+                    + f(this.getUTCHours()) + ":"
+                    + f(this.getUTCMinutes()) + ":"
+                    + f(this.getUTCSeconds()) + "Z"
+                )
+                : null;
+        };
+        Boolean.prototype.toJSON = this_value;
+        Number.prototype.toJSON = this_value;
+        String.prototype.toJSON = this_value;
+    }
+
+    var gap;
+    var indent;
+    var meta;
+    var rep;
+
+    function quote(string) {
+        rx_escapable.lastIndex = 0;
+        return rx_escapable.test(string)
+            ? "\"" + string.replace(rx_escapable, function (a) {
+                var c = meta[a];
+                return typeof c === "string"
+                    ? c
+                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+            }) + "\""
+            : "\"" + string + "\"";
+    }
+
+    function str(key, holder) {
+        var i;
+        var k;
+        var v;
+        var length;
+        var mind = gap;
+        var partial;
+        var value = holder[key];
+
+        if (value && typeof value === "object" && typeof value.toJSON === "function") {
+            value = value.toJSON(key);
+        }
+
+        if (typeof rep === "function") {
+            value = rep.call(holder, key, value);
+        }
+
+        switch (typeof value) {
+        case "string":
+            return quote(value);
+        case "number":
+            return (isFinite(value)) ? String(value) : "null";
+        case "boolean":
+        case "null":
+            return String(value);
+        case "object":
+            if (!value) {
+                return "null";
+            }
+            gap += indent;
+            partial = [];
+            if (Object.prototype.toString.apply(value) === "[object Array]") {
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || "null";
+                }
+                v = partial.length === 0
+                    ? "[]"
+                    : gap
+                        ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]"
+                        : "[" + partial.join(",") + "]";
+                gap = mind;
+                return v;
+            }
+            if (rep && typeof rep === "object") {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === "string") {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + ((gap) ? ": " : ":") + v);
+                        }
+                    }
+                }
+            } else {
+                for (k in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + ((gap) ? ": " : ":") + v);
+                        }
+                    }
+                }
+            }
+            v = partial.length === 0
+                ? "{}"
+                : gap
+                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
+                    : "{" + partial.join(",") + "}";
+            gap = mind;
+            return v;
+        }
+    }
+
+    if (typeof JSON.stringify !== "function") {
+        meta = {
+            "\b": "\\b",
+            "\t": "\\t",
+            "\n": "\\n",
+            "\f": "\\f",
+            "\r": "\\r",
+            "\"": "\\\"",
+            "\\": "\\\\"
+        };
+        JSON.stringify = function (value, replacer, space) {
+            var i;
+            gap = "";
+            indent = "";
+            if (typeof space === "number") {
+                for (i = 0; i < space; i += 1) {
+                    indent += " ";
+                }
+            } else if (typeof space === "string") {
+                indent = space;
+            }
+            rep = replacer;
+            if (replacer && typeof replacer !== "function" && (
+                typeof replacer !== "object"
+                || typeof replacer.length !== "number"
+            )) {
+                throw new Error("JSON.stringify");
+            }
+            return str("", {"": value});
+        };
+    }
+
+    if (typeof JSON.parse !== "function") {
+        JSON.parse = function (text, reviver) {
+            var j;
+            function walk(holder, key) {
+                var k;
+                var v;
+                var value = holder[key];
+                if (value && typeof value === "object") {
+                    for (k in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, k)) {
+                            v = walk(value, k);
+                            if (v !== undefined) {
+                                value[k] = v;
+                            } else {
+                                delete value[k];
+                            }
+                        }
+                    }
+                }
+                return reviver.call(holder, key, value);
+            }
+
+            text = String(text);
+            rx_dangerous.lastIndex = 0;
+            if (rx_dangerous.test(text)) {
+                text = text.replace(rx_dangerous, function (a) {
+                    return (
+                        "\\u"
+                        + ("0000" + a.charCodeAt(0).toString(16)).slice(-4)
+                    );
+                });
+            }
+
+            if (
+                rx_one.test(
+                    text
+                        .replace(rx_two, "@")
+                        .replace(rx_three, "]")
+                        .replace(rx_four, "")
+                )
+            ) {
+                j = eval("(" + text + ")");
+                return (typeof reviver === "function")
+                    ? walk({"": j}, "")
+                    : j;
+            }
+            throw new SyntaxError("JSON.parse");
+        };
+    }
+}());
+// ============================================================================
+
 // ExtendScript for Premiere Pro - Clip Assassin Plugin
 // Cuts. Without mercy.
 
@@ -445,11 +664,12 @@ function qcEnsureMediaEncoder() {
 // Exporta o ÁUDIO da SEQUÊNCIA ATIVA para outPath, usando um preset .epr de áudio.
 // Síncrono (bloqueia até terminar). Os timestamps da transcrição ficam alinhados
 // à timeline da sequência — que é a mesma fonte usada para montar os cortes.
-function qcExportActiveAudio(presetPath, outPath) {
+function qcExportActiveAudio(presetPath, outPath, sequenceId) {
     try {
         if (!app.project) return "ERROR: Abra um projeto primeiro.";
         var seq = app.project.activeSequence;
         if (!seq) return "ERROR: Nenhuma sequência ativa. Abra a sequência na timeline e tente de novo.";
+        if (sequenceId && String(seq.sequenceID) !== String(sequenceId)) return "ERROR: A sequência ativa mudou.";
         var pf = new File(presetPath);
         if (!pf.exists) return "ERROR: Preset de áudio (.epr) não encontrado: " + presetPath;
 
@@ -457,7 +677,10 @@ function qcExportActiveAudio(presetPath, outPath) {
 
         var waType;
         try { waType = app.encoder.ENCODE_ENTIRE; } catch (e) { waType = 0; }
-        try { seq.exportAsMediaDirect(outPath, presetPath, waType); }
+        try {
+            var oldFile = new File(outPath); if (oldFile.exists && !oldFile.remove()) return "ERROR: Não foi possível substituir o áudio anterior.";
+            if (seq.exportAsMediaDirect(outPath, presetPath, waType) === false) return "ERROR: Premiere recusou a exportação de áudio.";
+        }
         catch (e) { return "ERROR: Falha na exportação: " + e.toString(); }
 
         // Renderização delegada ao AME: aguarda o arquivo aparecer (máx. 10 min).
@@ -784,8 +1007,8 @@ function qcAttachSrtToSequence(seqTarget, srtPath, stylePath, seqNodeId) {
             return "ERROR: Este Premiere Pro nao possui a API 'createCaptionTrack' disponivel.";
         }
 
-        if (trackCreated === false && errDetail) {
-            return "ERROR: Falha ao criar faixa de legenda: " + errDetail;
+        if (!trackCreated) {
+            return "ERROR: Falha ao criar faixa de legenda: " + (errDetail || "Premiere não confirmou a criação.");
         }
 
         return "OK:" + seq.name;
@@ -795,12 +1018,13 @@ function qcAttachSrtToSequence(seqTarget, srtPath, stylePath, seqNodeId) {
 }
 
 // Anexa um arquivo SRT a sequencia ativa na timeline
-function qcAttachSrtToActiveSequence(srtPath, stylePath) {
+function qcAttachSrtToActiveSequence(srtPath, stylePath, sequenceId) {
     try {
         if (!app.project) return "ERROR: Abra um projeto primeiro.";
         var seq = app.project.activeSequence;
         if (!seq) return "ERROR: Nenhuma sequencia ativa na timeline.";
-        return qcAttachSrtToSequence(seq.name, srtPath, stylePath);
+        if (sequenceId && String(seq.sequenceID) !== String(sequenceId)) return "ERROR: A sequência ativa mudou.";
+        return qcAttachSrtToSequence(seq.name, srtPath, stylePath, seq.projectItem ? seq.projectItem.nodeId : "");
     } catch (e) {
         return "ERROR: " + e.toString();
     }
@@ -874,17 +1098,76 @@ function qcActiveSeqName() {
 function qcSanitizeForFolder(s) {
     return String(s).replace(/[^\w\-]+/g, '_').substring(0, 50);
 }
+function qcCacheHash(text) {
+    var a = 2166136261, b = 5381;
+    for (var i = 0; i < text.length; i++) {
+        a ^= text.charCodeAt(i); a += (a << 1) + (a << 4) + (a << 7) + (a << 8) + (a << 24);
+        b = ((b << 5) + b) ^ text.charCodeAt(i);
+    }
+    return (a >>> 0).toString(16) + '-' + (b >>> 0).toString(16);
+}
+function qcSequenceCacheState(seq, seen) {
+    var id = String(seq.sequenceID);
+    if (seen[id]) return ['nested-reference', id];
+    seen[id] = true;
+    var state = [id, String(seq.end), String(seq.timebase)];
+    var collections = [seq.videoTracks, seq.audioTracks];
+    for (var k = 0; k < collections.length; k++) {
+        var tracks = collections[k];
+        state.push(['tracks', k, tracks.numTracks]);
+        for (var t = 0; t < tracks.numTracks; t++) {
+            var track = tracks[t], muted = false;
+            try { muted = track.isMuted(); } catch (eMute) {}
+            var entries = ['track', t, muted];
+            for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c], pi = clip.projectItem;
+                var entry = [pi ? String(pi.nodeId) : '', clip.start.ticks, clip.end.ticks, clip.inPoint.ticks, clip.outPoint.ticks];
+                try { entry.push(clip.getSpeed(), clip.isSpeedReversed(), clip.disabled); } catch (eSpeed) {}
+                try {
+                    var media = pi.getMediaPath(), file = new File(media);
+                    entry.push(media, file.exists ? file.length : -1, file.exists ? String(file.modified) : 'offline');
+                } catch (eMedia) {}
+                try {
+                    if (pi.isSequence()) {
+                        for (var n = 0; n < app.project.sequences.numSequences; n++) {
+                            var nested = app.project.sequences[n];
+                            if (nested.projectItem && String(nested.projectItem.nodeId) === String(pi.nodeId)) {
+                                entry.push(qcSequenceCacheState(nested, seen)); break;
+                            }
+                        }
+                    }
+                } catch (eNest) {}
+                // Inclui parâmetros e keyframes expostos pelo DOM (volume, efeitos, etc.).
+                try {
+                    for (var ci = 0; ci < clip.components.numItems; ci++) {
+                        var component = clip.components[ci], params = [component.matchName];
+                        for (var pr = 0; pr < component.properties.numItems; pr++) {
+                            var prop = component.properties[pr], value = [prop.displayName];
+                            try { value.push(prop.getValue()); } catch (eVal) {}
+                            try {
+                                var keys = prop.getKeys();
+                                if (keys && keys.length) for (var q = 0; q < keys.length; q++) value.push([keys[q].ticks, prop.getValueAtKey(keys[q])]);
+                            } catch (eKeys) {}
+                            params.push(value);
+                        }
+                        entry.push(params);
+                    }
+                } catch (eComp) {}
+                entries.push(entry);
+            }
+            state.push(entries);
+        }
+    }
+    return state;
+}
 function qcActiveCacheKey() {
     try {
         if (!app.project || !app.project.activeSequence) return "ERROR: Nenhuma sequência ativa.";
         var seq = app.project.activeSequence;
-        var nodeId = "";
-        try { nodeId = seq.projectItem ? seq.projectItem.nodeId : ""; } catch (e) {}
-        if (!nodeId) nodeId = "noid";
-        return "OK:" + qcSanitizeForFolder(nodeId) + "__" + qcSanitizeForFolder(seq.name);
-    } catch (e) {
-        return "ERROR: " + e.toString();
-    }
+        var identity = String(app.project.path || '') + '|' + String(app.project.documentID || '') + '|' + String(seq.sequenceID);
+        var signature = JSON.stringify(qcSequenceCacheState(seq, {}));
+        return 'OK:v2_' + qcCacheHash(identity) + '_' + qcCacheHash(signature) + '__' + qcSanitizeForFolder(seq.name);
+    } catch(e) { return 'ERROR: Não foi possível identificar a timeline: ' + e.toString(); }
 }
 
 // FPS da sequência ativa (p/ alinhar tempos de legenda ao frame antes do SRT —
@@ -918,12 +1201,12 @@ function qcSetMogrtText(item, paramName, texto) {
         var val = '';
         try { val = String(prop.getValue()); } catch (e) {}
         if (val.indexOf('textEditValue') !== -1) {
-            var safe = esc.replace(/\$/g, '$$$$'); // $ é especial no replace
-            var novo = val.replace(/("textEditValue"\s*:\s*")(?:[^"\\]|\\.)*(")/, '$1' + safe + '$2');
             try {
-                if (novo !== val) { prop.setValue(novo, true); return true; }
-                prop.setValue('{"textEditValue":"' + esc + '"}', true); return true;
-            } catch (e) { return false; }
+                var obj = JSON.parse(val);
+                obj.textEditValue = texto;
+                prop.setValue(JSON.stringify(obj), true);
+                return true;
+            } catch(eJSON) { return false; }
         }
         var nm = '';
         try { nm = String(prop.displayName); } catch (e) {}
@@ -960,21 +1243,25 @@ function qcInsertCaptionMogrts(payloadStr) {
         if (!seq) return "ERROR: Nenhuma sequência ativa.";
 
         var data;
-        try { data = eval('(' + payloadStr + ')'); } catch (e) { return "ERROR: payload inválido: " + e.toString(); }
+        try { data = JSON.parse(payloadStr); } catch (e) { return "ERROR: payload inválido: " + e.toString(); }
+        if (data.sequenceId && String(data.sequenceId) !== String(seq.sequenceID)) return 'ERROR: A sequência ativa mudou.';
         var mogrt = data.mogrt, paramName = data.param || 'Source Text', caps = data.caps || [];
         if (!mogrt) return "ERROR: Caminho do .mogrt não informado.";
         if (!(new File(mogrt)).exists) return "ERROR: .mogrt não encontrado: " + mogrt;
         if (caps.length === 0) return "ERROR: Nenhuma legenda para inserir.";
 
+        for (var vi = 0; vi < caps.length; vi++) {
+            var cap = caps[vi];
+            if (!cap || typeof cap.s !== 'number' || typeof cap.e !== 'number' || !isFinite(cap.s) || !isFinite(cap.e) || cap.s < 0 || cap.e <= cap.s || !String(cap.t || '').replace(/\s/g, '')) return 'ERROR: Legenda inválida na posição ' + (vi + 1);
+        }
         // Trilha alvo: uma nova, acima de todas (não mexe no vídeo do corte).
         var targetTrack = seq.videoTracks.numTracks;
         qcEnsureTracks(seq, targetTrack + 1, 0);
         if (seq.videoTracks.numTracks <= targetTrack) {
-            // QE indisponível? usa a trilha mais alta existente mesmo.
-            targetTrack = seq.videoTracks.numTracks - 1;
+            return "ERROR: Não foi possível criar uma trilha livre para as legendas. Nenhum gráfico foi inserido.";
         }
 
-        var inserted = 0, textFails = 0, firstErr = "";
+        var inserted = 0, textFails = 0, durationFails = 0, firstErr = "";
         for (var i = 0; i < caps.length; i++) {
             var c = caps[i];
             var t = new Time(); t.seconds = c.s;
@@ -984,13 +1271,14 @@ function qcInsertCaptionMogrts(payloadStr) {
             inserted++;
 
             // duração: estica/encolhe o gráfico até o fim da legenda
-            try { var te = new Time(); te.seconds = c.e; item.end = te; } catch (e) {}
+            try { var te = new Time(); te.seconds = c.e; item.end = te; } catch (e) { durationFails++; }
 
             // texto: cascata de estratégias (técnica validada no auto-legenda)
             if (!qcSetMogrtText(item, paramName, c.t)) textFails++;
         }
 
         if (inserted === 0) return "ERROR: Nenhum gráfico inserido. " + firstErr;
+        if (inserted !== caps.length || textFails || durationFails) return 'ERROR: Inserção parcial: ' + inserted + '/' + caps.length + ' gráficos; ' + textFails + ' falhas de texto e ' + durationFails + ' de duração. Revise a trilha V' + (targetTrack + 1) + ' antes de repetir. ' + firstErr;
         var msg = "SUCCESS: " + inserted + " legenda(s) inserida(s) na trilha V" + (targetTrack + 1);
         if (textFails > 0) msg += " — ATENÇÃO: " + textFails + " sem texto (confira o nome do campo de texto do MOGRT no config: mogrt_text_param)";
         return msg;
@@ -1437,17 +1725,19 @@ function qcAddChapterMarkersToSequence(seqName, chaptersStr) {
 
 function qcEnsureAcabamentosEngines() {
     try {
-        if (typeof AutoCut === "undefined") {
+        if (typeof $.global.AutoCut === "undefined" || !$.global.AutoCut.duplicateActiveSequence) {
             var cutPaths = [
                 (function() { try { return new File($.fileName).parent.fsName + "/autocut-engine.jsx"; } catch(e){ return ""; } })(),
-                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/quarks_cuts/jsx/autocut-engine.jsx",
-                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/com.brainstorm.premiere.autocut/host/main.jsx"
+                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/quarks_cuts/jsx/autocut-engine.jsx"
             ];
             for (var c = 0; c < cutPaths.length; c++) {
                 if (cutPaths[c]) {
                     var f = new File(cutPaths[c]);
                     if (f.exists) {
                         $.evalFile(f);
+                        if (typeof AutoCut !== "undefined") {
+                            $.global.AutoCut = AutoCut;
+                        }
                         break;
                     }
                 }
@@ -1456,17 +1746,19 @@ function qcEnsureAcabamentosEngines() {
     } catch (eCut) {}
 
     try {
-        if (typeof AutoJCut === "undefined") {
+        if (typeof $.global.AutoJCut === "undefined" || !$.global.AutoJCut.duplicateActiveSequence) {
             var jcutPaths = [
                 (function() { try { return new File($.fileName).parent.fsName + "/autojcut-engine.jsx"; } catch(e){ return ""; } })(),
-                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/quarks_cuts/jsx/autojcut-engine.jsx",
-                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/com.brainstorm.premiere.autojcut/host/main.jsx"
+                "C:/Program Files (x86)/Common Files/Adobe/CEP/extensions/quarks_cuts/jsx/autojcut-engine.jsx"
             ];
             for (var j = 0; j < jcutPaths.length; j++) {
                 if (jcutPaths[j]) {
                     var fj = new File(jcutPaths[j]);
                     if (fj.exists) {
                         $.evalFile(fj);
+                        if (typeof AutoJCut !== "undefined") {
+                            $.global.AutoJCut = AutoJCut;
+                        }
                         break;
                     }
                 }
@@ -1510,7 +1802,10 @@ function qcGetTimelineContext() {
                 sequenceName: seq.name,
                 sequenceId: String(seq.sequenceID),
                 durationSeconds: durationSec,
-                audioTracks: tracks
+                audioTracks: tracks,
+                width: seq.getSettings().videoFrameWidth,
+                height: seq.getSettings().videoFrameHeight,
+                fps: 1 / seq.getSettings().videoFrameRate.seconds
             }
         });
     } catch (e) {
@@ -1520,62 +1815,72 @@ function qcGetTimelineContext() {
 
 function qcExportSilenceRefAudio(jsonStr) {
     qcEnsureAcabamentosEngines();
-    if (typeof AutoCut === "undefined" || !AutoCut.exportReferenceTrack) {
+    var engine = $.global.AutoCut || (typeof AutoCut !== "undefined" ? AutoCut : null);
+    if (!engine || !engine.exportReferenceTrack) {
         return JSON.stringify({ ok: false, error: "Motor AutoCut nao pode ser carregado. Verifique os arquivos jsx." });
     }
-    return AutoCut.exportReferenceTrack(jsonStr);
+    return engine.exportReferenceTrack(jsonStr);
 }
 
-function qcDuplicateActiveSequence() {
+function qcDuplicateActiveSequence(sequenceId) {
+    if (sequenceId && (!app.project.activeSequence || String(app.project.activeSequence.sequenceID) !== String(sequenceId))) return JSON.stringify({ok:false,error:"A sequência ativa mudou antes do backup."});
     qcEnsureAcabamentosEngines();
-    if (typeof AutoCut !== "undefined" && AutoCut.duplicateActiveSequence) {
-        return AutoCut.duplicateActiveSequence();
+    var cutEngine = $.global.AutoCut || (typeof AutoCut !== "undefined" ? AutoCut : null);
+    if (cutEngine && cutEngine.duplicateActiveSequence) {
+        return cutEngine.duplicateActiveSequence();
     }
-    if (typeof AutoJCut !== "undefined" && AutoJCut.duplicateActiveSequence) {
-        return AutoJCut.duplicateActiveSequence();
+    var jcutEngine = $.global.AutoJCut || (typeof AutoJCut !== "undefined" ? AutoJCut : null);
+    if (jcutEngine && jcutEngine.duplicateActiveSequence) {
+        return jcutEngine.duplicateActiveSequence();
     }
     return JSON.stringify({ ok: false, error: "Funcao de duplicacao nao disponivel." });
 }
 
 function qcApplySilenceCuts(jsonStr) {
     qcEnsureAcabamentosEngines();
-    if (typeof AutoCut === "undefined" || !AutoCut.applyCuts) {
+    var engine = $.global.AutoCut || (typeof AutoCut !== "undefined" ? AutoCut : null);
+    if (!engine || !engine.applyCuts) {
         return JSON.stringify({ ok: false, error: "Motor AutoCut nao disponivel." });
     }
-    return AutoCut.applyCuts(jsonStr);
+    return engine.applyCuts(jsonStr);
 }
 
 function qcRestoreSilenceBackup(jsonStr) {
     qcEnsureAcabamentosEngines();
-    if (typeof AutoCut === "undefined" || !AutoCut.restoreBackup) {
+    var engine = $.global.AutoCut || (typeof AutoCut !== "undefined" ? AutoCut : null);
+    if (!engine || !engine.restoreBackup) {
         return JSON.stringify({ ok: false, error: "Motor AutoCut nao disponivel." });
     }
-    return AutoCut.restoreBackup(jsonStr);
+    return engine.restoreBackup(jsonStr);
 }
 
 function qcApplyJCuts(jsonStr) {
     qcEnsureAcabamentosEngines();
-    if (typeof AutoJCut === "undefined" || !AutoJCut.generateJCuts) {
+    var engine = $.global.AutoJCut || (typeof AutoJCut !== "undefined" ? AutoJCut : null);
+    if (!engine || !engine.generateJCuts) {
         return JSON.stringify({ ok: false, error: "Motor AutoJCut nao disponivel." });
     }
-    return AutoJCut.generateJCuts(jsonStr);
+    return engine.generateJCuts(jsonStr);
 }
 
 function qcRestoreJCutBackup(jsonStr) {
     qcEnsureAcabamentosEngines();
-    if (typeof AutoJCut === "undefined" || !AutoJCut.restoreBackup) {
+    var engine = $.global.AutoJCut || (typeof AutoJCut !== "undefined" ? AutoJCut : null);
+    if (!engine || !engine.restoreBackup) {
         return JSON.stringify({ ok: false, error: "Motor AutoJCut nao disponivel." });
     }
-    return AutoJCut.restoreBackup(jsonStr);
+    return engine.restoreBackup(jsonStr);
 }
 
 // Importa o arquivo de overlay de legenda animada (.mov) e insere na trilha V2 acima do corte
-function qcImportAndPlaceOverlay(movPath) {
+function qcImportAndPlaceOverlay(movPath, sequenceId) {
     try {
         if (!app.project) return "ERROR: Abra um projeto primeiro.";
         var seq = app.project.activeSequence;
         if (!seq) return "ERROR: Nenhuma sequencia ativa.";
 
+        if (sequenceId && String(seq.sequenceID) !== String(sequenceId)) return 'ERROR: A sequência ativa mudou. Overlay salvo, mas não inserido.';
+        if (!(new File(movPath)).exists) return 'ERROR: Overlay não encontrado.';
         var bin = qcGetOrCreateBin('legendas');
         app.project.importFiles([movPath], true, bin, false);
 
@@ -1598,10 +1903,14 @@ function qcImportAndPlaceOverlay(movPath) {
         }
         if (!pItem) return "ERROR: Arquivo importado nao encontrado no projeto.";
 
-        qcEnsureTracks(seq, 2, 0);
-        var targetTrack = (seq.videoTracks.numTracks > 1) ? seq.videoTracks[1] : seq.videoTracks[0];
+        var targetIndex = seq.videoTracks.numTracks;
+        qcEnsureTracks(seq, targetIndex + 1, 0);
+        if (seq.videoTracks.numTracks <= targetIndex) return 'ERROR: Não foi possível criar uma trilha livre. Overlay importado, mas não inserido.';
+        var targetTrack = seq.videoTracks[targetIndex];
+        var before = targetTrack.clips.numItems;
         targetTrack.overwriteClip(pItem, 0);
-        return "SUCCESS: Legenda animada inserida na trilha V2 da timeline!";
+        if (targetTrack.clips.numItems <= before) return 'ERROR: Premiere não confirmou a inserção do overlay.';
+        return 'SUCCESS: Legenda animada inserida na trilha V' + (targetIndex + 1) + '.';
     } catch (e) {
         return "ERROR: " + e.toString();
     }
