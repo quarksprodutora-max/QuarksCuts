@@ -1915,3 +1915,84 @@ function qcImportAndPlaceOverlay(movPath, sequenceId) {
         return "ERROR: " + e.toString();
     }
 }
+
+function qcExportActiveSequenceXml(outXmlPath) {
+    try {
+        if (!app.project) return 'ERROR: Nenhum projeto aberto.';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'ERROR: Nenhuma sequencia ativa.';
+
+        var file = new File(outXmlPath);
+        if (file.exists) file.remove();
+
+        // 1. Tenta exportFinalCutProXML nativo do Premiere Pro
+        if (typeof app.project.exportFinalCutProXML === 'function') {
+            var ok = app.project.exportFinalCutProXML(outXmlPath, 1);
+            if (ok && file.exists) {
+                return 'OK:' + outXmlPath;
+            }
+        }
+        return 'FALLBACK_DOM';
+    } catch (e) {
+        return 'ERROR: ' + (e.message || String(e));
+    }
+}
+
+function qcGetActiveTimelineClipsJson() {
+    try {
+        if (!app.project) return 'ERROR: Nenhum projeto aberto.';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'ERROR: Nenhuma sequencia ativa.';
+
+        var clips = [];
+        var fps = 30;
+        try {
+            var f = parseFloat(seq.timebase);
+            if (f > 0) fps = f;
+        } catch(err) {}
+
+        for (var v = 0; v < seq.videoTracks.numTracks; v++) {
+            var vt = seq.videoTracks[v];
+            for (var c = 0; c < vt.clips.numItems; c++) {
+                var clip = vt.clips[c];
+                clips.push({
+                    tipo: 'video',
+                    track: v,
+                    nome: clip.name,
+                    timeline_start: clip.start.seconds,
+                    timeline_end: clip.end.seconds,
+                    source_in: clip.inPoint.seconds,
+                    source_out: clip.outPoint.seconds,
+                    duracao: clip.duration.seconds
+                });
+            }
+        }
+
+        for (var a = 0; a < seq.audioTracks.numTracks; a++) {
+            var at = seq.audioTracks[a];
+            for (var ac = 0; ac < at.clips.numItems; ac++) {
+                var aclip = at.clips[ac];
+                clips.push({
+                    tipo: 'audio',
+                    track: a,
+                    nome: aclip.name,
+                    timeline_start: aclip.start.seconds,
+                    timeline_end: aclip.end.seconds,
+                    source_in: aclip.inPoint.seconds,
+                    source_out: aclip.outPoint.seconds,
+                    duracao: aclip.duration.seconds
+                });
+            }
+        }
+
+        return 'OK:' + JSON.stringify({
+            sequenceName: seq.name,
+            sequenceId: String(seq.sequenceID),
+            fps: fps,
+            duration: seq.end ? seq.end.seconds : 0,
+            clips: clips
+        });
+    } catch (e) {
+        return 'ERROR: ' + (e.message || String(e));
+    }
+}

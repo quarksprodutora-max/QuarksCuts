@@ -443,9 +443,31 @@ function selectEditorialClips(clips, limit) {
   return selected;
 }
 
+function getMemoriaEditorialRules() {
+  const possiblePaths = [
+    'd:\\Editor\\quarks-brain\\memoria_editorial.json',
+    path.join(__dirname, '..', '..', '..', 'quarks-brain', 'memoria_editorial.json')
+  ];
+  for (var i = 0; i < possiblePaths.length; i++) {
+    var p = possiblePaths[i];
+    try {
+      if (fs.existsSync(p)) {
+        var mem = JSON.parse(fs.readFileSync(p, 'utf8'));
+        var rules = [];
+        if (mem.regras_aprendidas && mem.regras_aprendidas.length) {
+          rules.push('REGRAS APRENDIDAS COM A EDITORA-CHEFE (OBRIGATÓRIO RESPEITAR):\n- ' + mem.regras_aprendidas.slice(0, 15).join('\n- '));
+        }
+        if (rules.length) return '\n\n' + rules.join('\n\n');
+      }
+    } catch (e) {}
+  }
+  return '';
+}
+
 async function editorialJson(cfg, apiKey, prompt) {
+  const dynamicRules = getMemoriaEditorialRules();
   const raw = await callGemini(modelList(cfg), apiKey, {
-    systemInstruction: { parts: [{ text: CORTES_SYSTEM_INSTRUCTION }] },
+    systemInstruction: { parts: [{ text: CORTES_SYSTEM_INSTRUCTION + dynamicRules }] },
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: 'application/json' }
   });

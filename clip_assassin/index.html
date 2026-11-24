@@ -499,6 +499,20 @@
 
     <div id="qcAcJCutSummary" style="display:none;font-size:11.5px;padding:8px 10px;background:rgba(124,58,237,0.1);border-radius:5px;border:1px solid rgba(124,58,237,0.25);color:#c084fc;margin-top:8px;"></div>
   </div>
+
+  <!-- CARD 3: BANCO DE APRENDIZADO EDITORIAL -->
+  <div class="card card-accent-cfg" style="border-color:rgba(255,194,14,0.4);background:rgba(255,194,14,0.04);margin-top:10px;">
+    <div class="card-title" style="color:#ffc20e;">🎓 3. Banco de Aprendizado Editorial <span class="badge" style="background:#ffc20e;color:#000;font-weight:700;">Flywheel</span></div>
+    <div class="card-hint">
+      Após finalizar o ajuste dos cortes na timeline, grave a sua edição para alimentar o banco de dados. A IA analisa suas correções, exporta o XML e aprende novas regras para não repetir o trabalho.
+    </div>
+    <div style="margin-top:10px;">
+      <button id="qcBtnSalvarAprendizado" class="btn-block" style="background:#ffc20e;color:#000;font-weight:700;padding:10px;border-radius:6px;cursor:pointer;border:none;font-size:12px;">
+        📥 Salvar Edição Corrigida no Banco (Exportar XML)
+      </button>
+    </div>
+    <div id="qcStatusAprendizado" style="display:none;font-size:11px;padding:8px 10px;background:rgba(255,194,14,0.1);border-radius:5px;border:1px solid rgba(255,194,14,0.3);color:#fde047;margin-top:8px;line-height:1.4;"></div>
+  </div>
 </div>
 
 <!-- ==================== ABA 5: CONFIGURAÇÕES ==================== -->
@@ -630,7 +644,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
 });
 
 var qcBusy = false;
-var QC_BOTOES = ['qcRefreshBtn','qcLoadBtn','qcGenBtn','qcLegendaBtn','qcLegendaTimelineBtn','qcLegendaAnimadaBtn','qcBatchLegendasBtn','qcBatchApplyExistingSrtBtn','qcBrowseTextStyleBtn','qcRefreshBinsBtn','qcMogrtBtn','qcMogrtSrtBtn','qcUnnestBtn','qcPodcastBtn','qcHookApenasBtn','qcAcRunSilenceBtn','qcAcRunJCutBtn','qcAcRefreshSeqBtn','qcOpenSubEditorBtn','qcSubSaveSrtBtn','qcSubApplySrtBtn','qcSubApplyMogrtBtn','qcAcUndoSilenceBtn','qcAcUndoJCutBtn','qcTranscriptBuildBtn','qcClearCacheBtn'];
+var QC_BOTOES = ['qcRefreshBtn','qcLoadBtn','qcGenBtn','qcLegendaBtn','qcLegendaTimelineBtn','qcLegendaAnimadaBtn','qcBatchLegendasBtn','qcBatchApplyExistingSrtBtn','qcBrowseTextStyleBtn','qcRefreshBinsBtn','qcMogrtBtn','qcMogrtSrtBtn','qcUnnestBtn','qcPodcastBtn','qcHookApenasBtn','qcAcRunSilenceBtn','qcAcRunJCutBtn','qcAcRefreshSeqBtn','qcOpenSubEditorBtn','qcSubSaveSrtBtn','qcSubApplySrtBtn','qcSubApplyMogrtBtn','qcAcUndoSilenceBtn','qcAcUndoJCutBtn','qcTranscriptBuildBtn','qcClearCacheBtn','qcBtnSalvarAprendizado'];
 function qcSetBusy(b) {
   qcBusy = b;
   for (var i = 0; i < QC_BOTOES.length; i++) { var el = document.getElementById(QC_BOTOES[i]); if (el) el.disabled = b; }
@@ -918,7 +932,14 @@ document.getElementById('qcGenBtn').addEventListener('click', function() {
   var customVal = document.getElementById('qcCustomPrompt') ? document.getElementById('qcCustomPrompt').value : '';
   var opts = { quantidade: isNaN(qtd) ? 0 : qtd, minDur: isNaN(minD) ? 0 : minD, maxDur: isNaN(maxD) ? 0 : maxD, tom: tomVal, modoMontagem: modoVal, instrucaoCustom: customVal, onProgress: function(m) { showStatus('\u{1F504} ' + m, 'info'); } };
   qcExportAndTranscribe(eng, preset, modelSel)
-    .then(function(res) { showStatus('\u{1F504} Pensando nos melhores cortes (Gemini)...', 'info'); return eng.gerarCortes(res.segments, opts); })
+    .then(function(res) {
+      showStatus('\u{1F504} Pensando nos melhores cortes (Gemini)...', 'info');
+      qcSalvarBancoCortes(eng, res.segments, null, 'whisper');
+      return eng.gerarCortes(res.segments, opts).then(function(out) {
+        qcSalvarBancoCortes(eng, res.segments, out, 'cortes_reels');
+        return out;
+      });
+    })
     .then(function(out) {
       var clips = out.clips || []; if (!clips.length) { showStatus('\u26A0\uFE0F Nenhum corte sugerido.', 'error'); return; }
       qcWriteViralReport(eng, clips); if (out.promo) qcWritePromoReport(eng, out.promo);
@@ -933,7 +954,14 @@ document.getElementById('qcHookApenasBtn').addEventListener('click', function() 
   if (!qcComecar()) return; var eng = qcLoadEngine(); if (!eng) return; var preset = qcResolvePreset(eng); if (!preset) return;
   var hookStyle = document.getElementById('qcPodcastHook').value, modelSel = document.getElementById('qcQuality').value;
   qcExportAndTranscribe(eng, preset, modelSel)
-    .then(function(res) { showStatus('\u{1F525} Pensando no Hook (Gemini)...', 'info'); return eng.gerarHookApenas(res.segments, { hookStyle: hookStyle }); })
+    .then(function(res) {
+      showStatus('\u{1F525} Pensando no Hook (Gemini)...', 'info');
+      qcSalvarBancoCortes(eng, res.segments, null, 'whisper');
+      return eng.gerarHookApenas(res.segments, { hookStyle: hookStyle }).then(function(out) {
+        qcSalvarBancoCortes(eng, res.segments, out, 'hook_trailer');
+        return out;
+      });
+    })
     .then(function(out) {
       var segs = out.hook_segmentos || []; if (!segs.length) { showStatus('Nenhum segmento gerado.', 'error'); return; }
       var ranges = []; for (var j = 0; j < segs.length; j++) ranges.push(segs[j].inicio + ':' + segs[j].fim);
@@ -2114,6 +2142,146 @@ document.getElementById('qcAcRunJCutBtn').addEventListener('click', function() {
 });
 
 document.getElementById('qcAcUndoJCutBtn').addEventListener('click', function() { return qcRestoreEditorBackup('jcut'); });
+
+/* ==================== FLYWHEEL: BANCO DE APRENDIZADO EDITORIAL ==================== */
+function qcSalvarBancoCortes(eng, whisperSegments, iaOutput, tipo) {
+  try {
+    csInterface.evalScript('qcActiveSeqName()', function(res) {
+      var seqName = (res && res.indexOf('OK:') === 0) ? res.substring(3) : 'Episodio_' + Date.now();
+      var safeName = seqName.replace(/[^\w\-]+/g, '_');
+      var baseDir = 'D:\\Editor\\quarks-brain\\episodios_quarks\\' + safeName;
+      if (!eng.fs.existsSync(baseDir)) {
+        try { eng.fs.mkdirSync(baseDir, { recursive: true }); } catch(err) {}
+      }
+
+      if (whisperSegments && !eng.fs.existsSync(baseDir + '\\whisper.json')) {
+        eng.fs.writeFileSync(baseDir + '\\whisper.json', JSON.stringify({ sequence: seqName, segments: whisperSegments }, null, 2), 'utf8');
+      }
+
+      if (iaOutput) {
+        var payload = { sequence: seqName, tipo: tipo, data: new Date().toISOString(), sugestao: iaOutput };
+        eng.fs.writeFileSync(baseDir + '\\sugestao_ia.json', JSON.stringify(payload, null, 2), 'utf8');
+        qcPanelLog('[Flywheel] Sugestão salva no banco: ' + baseDir + '\\sugestao_ia.json');
+      }
+    });
+  } catch (e) {
+    qcPanelLog('[Flywheel] Aviso ao salvar banco: ' + (e && e.message ? e.message : e));
+  }
+}
+
+function qcExecutarSalvarEdicaoAprendizado() {
+  var eng = qcLoadEngine();
+  if (!eng) return;
+  var statusDiv = document.getElementById('qcStatusAprendizado');
+  if (statusDiv) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.color = '#ffc20e';
+    statusDiv.innerHTML = '⏳ Lendo timeline e exportando XML da edição...';
+  }
+
+  csInterface.evalScript('qcActiveSeqName()', function(seqNameRes) {
+    var seqName = (seqNameRes && seqNameRes.indexOf('OK:') === 0) ? seqNameRes.substring(3) : 'Episodio_' + Date.now();
+    var safeName = seqName.replace(/[^\w\-]+/g, '_');
+    var baseDir = 'D:\\Editor\\quarks-brain\\episodios_quarks\\' + safeName;
+
+    try {
+      if (!eng.fs.existsSync(baseDir)) {
+        eng.fs.mkdirSync(baseDir, { recursive: true });
+      }
+    } catch(e) {}
+
+    var outXmlPath = baseDir + '\\edicao_final.xml';
+
+    // 1. Exporta XML nativo do Premiere
+    csInterface.evalScript('qcExportActiveSequenceXml(' + JSON.stringify(outXmlPath) + ')', function(xmlRes) {
+      // 2. Extrai também todos os clipes da timeline ativa via ExtendScript
+      csInterface.evalScript('qcGetActiveTimelineClipsJson()', function(clipsRes) {
+        var timelineClips = null;
+        try {
+          if (clipsRes && clipsRes.indexOf('OK:') === 0) {
+            timelineClips = JSON.parse(clipsRes.substring(3));
+            eng.fs.writeFileSync(baseDir + '\\edicao_final_timeline.json', JSON.stringify(timelineClips, null, 2), 'utf8');
+          }
+        } catch(e) {}
+
+        // 3. Lê o XML exportado ou gera a representação XML básica
+        var xmlContent = '';
+        try {
+          if (eng.fs.existsSync(outXmlPath)) {
+            xmlContent = eng.fs.readFileSync(outXmlPath, 'utf8');
+          }
+        } catch(e) {}
+
+        if (!xmlContent && timelineClips) {
+          xmlContent = '<xmeml version="4"><sequence><timebase>' + (timelineClips.fps || 30) + '</timebase><media>';
+          for (var i = 0; i < (timelineClips.clips || []).length; i++) {
+            var c = timelineClips.clips[i];
+            xmlContent += '<clipitem><name>' + (c.nome || 'Clip') + '</name><in>' + Math.round((c.source_in || 0) * 30) + '</in><out>' + Math.round((c.source_out || 0) * 30) + '</out><start>' + Math.round((c.timeline_start || 0) * 30) + '</start><end>' + Math.round((c.timeline_end || 0) * 30) + '</end></clipitem>';
+          }
+          xmlContent += '</media></sequence></xmeml>';
+          eng.fs.writeFileSync(outXmlPath, xmlContent, 'utf8');
+        }
+
+        // 4. Carrega whisper.json e sugestao_ia.json da pasta
+        var whisperData = [];
+        var sugestaoIa = {};
+        try {
+          if (eng.fs.existsSync(baseDir + '\\whisper.json')) {
+            var w = JSON.parse(eng.fs.readFileSync(baseDir + '\\whisper.json', 'utf8'));
+            whisperData = w.segments || w;
+          }
+          if (eng.fs.existsSync(baseDir + '\\sugestao_ia.json')) {
+            sugestaoIa = JSON.parse(eng.fs.readFileSync(baseDir + '\\sugestao_ia.json', 'utf8'));
+          }
+        } catch(e) {}
+
+        if (statusDiv) {
+          statusDiv.innerHTML = '⚡ Enviando para o motor de aprendizado (Meta-Análise)...';
+        }
+
+        // 5. Envia para o servidor local quarks-brain
+        fetch('http://localhost:3737/api/aprender', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            episodio: seqName,
+            tipo: 'cortes_timeline',
+            whisperData: whisperData,
+            sugestaoIa: sugestaoIa.sugestao || sugestaoIa,
+            xmlPremiereText: xmlContent
+          })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+          if (resp.ok) {
+            var regrasHtml = (resp.regrasNovas || []).map(function(r) { return '• ' + r; }).join('<br>');
+            if (statusDiv) {
+              statusDiv.innerHTML = '<b style="color:#4ade80;">✔ Edição gravada no banco com sucesso!</b><br>' +
+                '<span style="color:#e2e8f0;">' + (resp.diagnostico || 'Padrões aprendidos com sucesso.') + '</span><br>' +
+                (regrasHtml ? '<div style="margin-top:4px;color:#fde047;"><b>Regras adicionadas ao prompt:</b><br>' + regrasHtml + '</div>' : '');
+            }
+            showStatus('✔ Edição gravada no banco de aprendizado!', 'success');
+          } else {
+            if (statusDiv) {
+              statusDiv.innerHTML = '<span style="color:#f87171;">⚠️ Arquivos salvos em ' + safeName + ', mas o servidor retornou: ' + (resp.error || 'Erro') + '</span>';
+            }
+            showStatus('Arquivos salvos localmente.', 'info');
+          }
+        })
+        .catch(function(err) {
+          if (statusDiv) {
+            statusDiv.innerHTML = '<b style="color:#4ade80;">✔ XML e timeline salvos com sucesso em:</b><br><code>' + baseDir + '</code><br><span style="color:#94a3b8;">Dica: Abra o dashboard em http://localhost:3737 para analisar.</span>';
+          }
+          showStatus('XML e dados salvos no banco local!', 'success');
+        });
+      });
+    });
+  });
+}
+
+document.getElementById('qcBtnSalvarAprendizado').addEventListener('click', function() {
+  qcExecutarSalvarEdicaoAprendizado();
+});
 
 window.addEventListener('load', function() {
   qcRefreshSources();
